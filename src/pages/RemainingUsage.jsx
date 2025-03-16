@@ -12,10 +12,21 @@ const RemainingUsage = () => {
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showDetailView, setShowDetailView] = useState(false);
+  const [studentLessons, setStudentLessons] = useState([]);
+  const [loadingLessons, setLoadingLessons] = useState(false);
+  const [statusUpdateLoading, setStatusUpdateLoading] = useState(false);
+  const [studentDetails, setStudentDetails] = useState(null);
 
   useEffect(() => {
     fetchStudents();
   }, []);
+
+  useEffect(() => {
+    if (selectedStudent) {
+      fetchStudentLessons(selectedStudent.registration_id);
+      fetchStudentDetails(selectedStudent.registration_id);
+    }
+  }, [selectedStudent]);
 
   const fetchStudents = async () => {
     try {
@@ -35,6 +46,105 @@ const RemainingUsage = () => {
     }
   };
 
+  const fetchStudentDetails = async (registrationId) => {
+    try {
+      const { data, error } = await supabase
+        .from('student_usage_summary')
+        .select('*')
+        .eq('registration_id', registrationId)
+        .single();
+
+      if (error) throw error;
+      setStudentDetails(data);
+    } catch (error) {
+      console.error('Error fetching student details:', error);
+    }
+  };
+
+  const fetchStudentLessons = async (registrationId) => {
+    try {
+      setLoadingLessons(true);
+      
+      const { data, error } = await supabase
+        .from('event_participants')
+        .select(`
+          id,
+          status,
+          is_makeup,
+          event_id,
+          registration_id,
+          makeup_for_id,
+          postponed_to_id,
+          postponed_from_id,
+          makeup_notes,
+          postponed_notes,
+          cancellation_reason,
+          cancellation_date,
+          created_at
+        `)
+        .eq('registration_id', registrationId);
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        const eventIds = data.map(participant => participant.event_id);
+        const { data: eventsData, error: eventsError } = await supabase
+          .from('events')
+          .select('*')
+          .in('id', eventIds);
+          
+        if (eventsError) throw eventsError;
+        
+        const mergedData = data.map(participant => {
+          const event = eventsData.find(event => event.id === participant.event_id);
+          return {
+            ...participant,
+            events: event || null
+          };
+        });
+        
+        const sortedData = mergedData.sort((a, b) => {
+          if (!a.events || !b.events) return 0;
+          return new Date(b.events.event_date) - new Date(a.events.event_date);
+        });
+        
+        setStudentLessons(sortedData);
+      } else {
+        setStudentLessons([]);
+      }
+    } catch (error) {
+      console.error('Error fetching student lessons:', error);
+    } finally {
+      setLoadingLessons(false);
+    }
+  };
+
+  const updateLessonStatus = async (lessonId, newStatus) => {
+    try {
+      setStatusUpdateLoading(true);
+      
+      const updateData = { status: newStatus };
+      
+      const { error } = await supabase
+        .from('event_participants')
+        .update(updateData)
+        .eq('id', lessonId);
+
+      if (error) throw error;
+      
+      // Güncelleme sonrası verileri yenile
+      await fetchStudents();
+      await fetchStudentLessons(selectedStudent.registration_id);
+      // Öğrenci detaylarını da yenile
+      await fetchStudentDetails(selectedStudent.registration_id);
+      
+    } catch (error) {
+      console.error('Error updating lesson status:', error);
+    } finally {
+      setStatusUpdateLoading(false);
+    }
+  };
+
   const handleDetailClick = (student) => {
     setSelectedStudent(student);
     setShowDetailView(true);
@@ -43,12 +153,14 @@ const RemainingUsage = () => {
   const handleCloseDetail = () => {
     setShowDetailView(false);
     setSelectedStudent(null);
+    setStudentDetails(null);
   };
 
   const handleFilterClick = () => {
     if (showDetailView) {
       setShowDetailView(false);
       setSelectedStudent(null);
+      setStudentDetails(null);
     }
     setIsFilterSheetOpen(true);
   };
@@ -508,62 +620,152 @@ const RemainingUsage = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white uppercase tracking-wider">
-                      Katıldığı Dersler
+                      Dersler
                     </h3>
-                    <span className="text-xs text-[#6e6e73] dark:text-[#86868b]">
-                      Son 30 gün
-                    </span>
                   </div>
+                  
+                  {loadingLessons ? (
+                    // Loading state
                   <div className="space-y-2">
-                    {/* Dummy Veri */}
-                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
+                      {[...Array(3)].map((_, index) => (
+                        <div key={index} className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                       <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
-                            İngilizce Oyun Dersi
-                          </span>
-                          <span className="block text-xs text-[#6e6e73] dark:text-[#86868b]">
-                            15 Mart 2024, 14:30
-                          </span>
+                            <div className="space-y-1 w-1/2">
+                              <div className="h-4 bg-[#e5e5ea] dark:bg-[#2a3241] rounded-md w-32 relative overflow-hidden">
+                                <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                              </div>
+                              <div className="h-3 bg-[#e5e5ea] dark:bg-[#2a3241] rounded-md w-24 relative overflow-hidden">
+                                <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                              </div>
+                            </div>
+                            <div className="h-7 bg-[#e5e5ea] dark:bg-[#2a3241] rounded-lg w-20 relative overflow-hidden">
+                              <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                            </div>
+                          </div>
                         </div>
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 ring-1 ring-inset ring-emerald-500/20 dark:ring-emerald-400/20">
-                          Katıldı
+                      ))}
+                      </div>
+                  ) : studentLessons.length === 0 ? (
+                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-6 rounded-xl text-center">
+                      <p className="text-[#1d1d1f] dark:text-white font-medium">
+                        Henüz ders kaydı yok
+                      </p>
+                      <p className="text-sm text-[#6e6e73] dark:text-[#86868b] mt-1">
+                        Bu öğrenci için ders planlaması yapılmamış.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {studentLessons.map((lesson) => (
+                        <div key={lesson.id} className="bg-[#f5f5f7] dark:bg-[#161922] rounded-xl overflow-hidden">
+                          {/* Üst kısım - Ders bilgileri ve statü */}
+                          <div className="p-4">
+                      <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                          <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
+                                  {lesson.events.event_type === 'ingilizce' ? 'İngilizce Oyun Dersi' : 
+                                  lesson.events.event_type === 'duyusal' ? 'Duyusal Gelişim Dersi' : 
+                                  lesson.events.custom_description || 'Özel Ders'}
+                                  {lesson.is_makeup && ' (Telafi)'}
+                                </span>
+                                <span className="text-xs text-[#6e6e73] dark:text-[#86868b] mt-1">
+                                  {lesson.events && format(new Date(lesson.events.event_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}
+                                </span>
+                                
+                                {/* Ek notlar */}
+                                {lesson.cancellation_reason && (
+                                  <span className="block text-xs text-red-500 mt-1">
+                                    İptal sebebi: {lesson.cancellation_reason}
+                                  </span>
+                                )}
+                                {lesson.makeup_notes && (
+                                  <span className="block text-xs text-blue-500 mt-1">
+                                    Telafi notu: {lesson.makeup_notes}
+                          </span>
+                                )}
+                                {lesson.postponed_notes && (
+                                  <span className="block text-xs text-amber-500 mt-1">
+                                    Erteleme notu: {lesson.postponed_notes}
+                          </span>
+                                )}
+                        </div>
+                              
+                              <div>
+                                {/* Durum etiketi */}
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium
+                                  ${lesson.status === 'scheduled' ? 'bg-[#0071e3]/10 text-[#0071e3] ring-1 ring-inset ring-[#0071e3]/20' : 
+                                    lesson.status === 'attended' ? 'bg-emerald-400/10 text-emerald-700 dark:text-emerald-300 ring-1 ring-inset ring-emerald-500/20 dark:ring-emerald-400/20' : 
+                                    lesson.status === 'no_show' ? 'bg-red-400/10 text-red-700 dark:text-red-300 ring-1 ring-inset ring-red-500/20 dark:ring-red-400/20' :
+                                    lesson.status === 'cancelled' ? 'bg-gray-400/10 text-gray-700 dark:text-gray-300 ring-1 ring-inset ring-gray-500/20 dark:ring-gray-400/20' :
+                                    lesson.status === 'makeup' ? 'bg-blue-400/10 text-blue-700 dark:text-blue-300 ring-1 ring-inset ring-blue-500/20 dark:ring-blue-400/20' :
+                                    lesson.status === 'postponed' ? 'bg-amber-400/10 text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-500/20 dark:ring-amber-400/20' :
+                                    'bg-gray-400/10 text-gray-700'
+                                  }`}>
+                                  {lesson.status === 'scheduled' ? 'Planlandı' : 
+                                  lesson.status === 'attended' ? 'Katıldı' : 
+                                  lesson.status === 'no_show' ? 'Gelmedi' : 
+                                  lesson.status === 'cancelled' ? 'İptal Edildi' : 
+                                  lesson.status === 'makeup' ? 'Telafi Dersi' : 
+                                  lesson.status === 'postponed' ? 'Ertelendi' : ''}
                         </span>
                       </div>
                     </div>
-
-                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
-                            İngilizce Oyun Dersi
-                          </span>
-                          <span className="block text-xs text-[#6e6e73] dark:text-[#86868b]">
-                            8 Mart 2024, 14:30
-                          </span>
+                          </div>
+                          
+                          {/* Border */}
+                          <hr className="border-[#d2d2d7] dark:border-[#2a3241]" />
+                          
+                          {/* Alt kısım - Butonlar (Her zaman göster) */}
+                          <div className="p-3 bg-[#f5f5f7]/50 dark:bg-[#161922]/70 flex items-center justify-between gap-2">
+                            <button
+                              onClick={() => updateLessonStatus(lesson.id, 'attended')}
+                              disabled={statusUpdateLoading}
+                              className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-lg ${
+                                lesson.status === 'attended' 
+                                  ? 'bg-emerald-400/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20 hover:bg-emerald-400/30 dark:hover:bg-emerald-400/30'
+                                  : 'bg-emerald-400/5 text-emerald-700/30 ring-1 ring-emerald-500/10 dark:bg-emerald-400/5 dark:text-emerald-300/30 dark:ring-emerald-400/10 hover:bg-emerald-400/20 dark:hover:bg-emerald-400/20 hover:text-emerald-700 dark:hover:text-emerald-300'
+                              } transition-colors`}
+                            >
+                              Katıldı
+                            </button>
+                            <button
+                              onClick={() => updateLessonStatus(lesson.id, 'no_show')}
+                              disabled={statusUpdateLoading}
+                              className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-lg ${
+                                lesson.status === 'no_show' 
+                                  ? 'bg-red-400/10 text-red-700 ring-1 ring-red-500/20 dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/20 hover:bg-red-400/30 dark:hover:bg-red-400/30'
+                                  : 'bg-red-400/5 text-red-700/30 ring-1 ring-red-500/10 dark:bg-red-400/5 dark:text-red-300/30 dark:ring-red-400/10 hover:bg-red-400/20 dark:hover:bg-red-400/20 hover:text-red-700 dark:hover:text-red-300'
+                              } transition-colors`}
+                            >
+                              Gelmedi
+                            </button>
+                            <button
+                              onClick={() => updateLessonStatus(lesson.id, 'postponed')}
+                              disabled={statusUpdateLoading}
+                              className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-lg ${
+                                lesson.status === 'postponed' 
+                                  ? 'bg-amber-400/10 text-amber-700 ring-1 ring-amber-500/20 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20 hover:bg-amber-400/30 dark:hover:bg-amber-400/30'
+                                  : 'bg-amber-400/5 text-amber-700/30 ring-1 ring-amber-500/10 dark:bg-amber-400/5 dark:text-amber-300/30 dark:ring-amber-400/10 hover:bg-amber-400/20 dark:hover:bg-amber-400/20 hover:text-amber-700 dark:hover:text-amber-300'
+                              } transition-colors`}
+                            >
+                              Ertele
+                            </button>
+                            <button
+                              onClick={() => updateLessonStatus(lesson.id, 'makeup')}
+                              disabled={statusUpdateLoading}
+                              className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-lg ${
+                                lesson.status === 'makeup' 
+                                  ? 'bg-blue-400/10 text-blue-700 ring-1 ring-blue-500/20 dark:bg-blue-400/10 dark:text-blue-300 dark:ring-blue-400/20 hover:bg-blue-400/30 dark:hover:bg-blue-400/30'
+                                  : 'bg-blue-400/5 text-blue-700/30 ring-1 ring-blue-500/10 dark:bg-blue-400/5 dark:text-blue-300/30 dark:ring-blue-400/10 hover:bg-blue-400/20 dark:hover:bg-blue-400/20 hover:text-blue-700 dark:hover:text-blue-300'
+                              } transition-colors`}
+                            >
+                              Telafi
+                            </button>
+                          </div>
                         </div>
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-400/10 text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-500/20 dark:ring-amber-400/20">
-                          İptal Edildi
-                        </span>
-                      </div>
+                      ))}
                     </div>
-
-                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
-                            İngilizce Oyun Dersi (Telafi)
-                          </span>
-                          <span className="block text-xs text-[#6e6e73] dark:text-[#86868b]">
-                            1 Mart 2024, 15:30
-                          </span>
-                        </div>
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-[#0071e3]/10 text-[#0071e3] dark:text-[#0071e3] ring-1 ring-inset ring-[#0071e3]/20">
-                          Telafi
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Kullanım Durumu */}
@@ -572,39 +774,35 @@ const RemainingUsage = () => {
                     Kullanım Durumu
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
+                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl flex items-center">
+                      <div>
                       <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
                         Kalan Ders
                       </label>
                       <span className={`text-2xl font-medium ${
-                        selectedStudent.remaining_lessons <= 0 
+                          studentDetails?.remaining_lessons <= 0 
                           ? 'text-red-700 dark:text-red-400'
-                          : selectedStudent.remaining_lessons <= 2
+                            : studentDetails?.remaining_lessons <= 2
                           ? 'text-amber-700 dark:text-amber-400'
                           : 'text-emerald-700 dark:text-emerald-400'
                       }`}>
-                        {selectedStudent.remaining_lessons}
+                          {studentDetails?.remaining_lessons}
                       </span>
                     </div>
-                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
-                      <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Katılım Oranı
-                      </label>
-                      <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
-                        {Math.round((selectedStudent.attended_lessons / (selectedStudent.attended_lessons + selectedStudent.remaining_lessons)) * 100)}%
-                      </span>
                     </div>
-                    <div className="col-span-2 bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl flex items-center justify-between">
+                    <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl flex items-center">
+                      <div>
                           <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
                             Ödeme Durumu
                           </label>
-                          <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium ${
-                            selectedStudent.payment_status === 'odendi'
+                        <span className={`inline-flex w-auto items-center px-3 py-1.5 rounded-lg text-xs font-medium ${
+                          studentDetails?.payment_status === 'odendi'
                               ? 'bg-emerald-400/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20'
                               : 'bg-amber-400/10 text-amber-700 ring-1 ring-amber-500/20 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20'
                           }`}>
-                            {selectedStudent.payment_status === 'odendi' ? 'Ödendi' : 'Beklemede'}
+                          {studentDetails?.payment_status === 'odendi' ? 'Ödendi' : 'Beklemede'}
                           </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -616,35 +814,35 @@ const RemainingUsage = () => {
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
-                      <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
+                      <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
                         Katıldığı Dersler
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
-                        {selectedStudent.attended_lessons}
+                        {studentDetails?.attended_lessons || 0}
                       </span>
                     </div>
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
-                      <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        İptal Edilen
+                      <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
+                        Gelmeyen
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
-                        {selectedStudent.cancelled_lessons}
+                        {studentDetails?.no_show_lessons || 0}
                       </span>
                     </div>
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
-                      <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
+                      <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
                         Telafi Dersleri
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
-                        {selectedStudent.makeup_completed}
+                        {studentDetails?.makeup_completed || 0}
                       </span>
                     </div>
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
-                      <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Bekleyen Telafi
+                      <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
+                        Ertelenen Dersler
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
-                        {selectedStudent.pending_makeup}
+                        {studentDetails?.postponed_lessons || 0}
                       </span>
                     </div>
                   </div>
