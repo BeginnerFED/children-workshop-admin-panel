@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FiClock, FiUsers, FiCalendar, FiInfo, FiPhone, FiDollarSign, FiPackage } from 'react-icons/fi';
-import { FaWhatsapp, FaLiraSign } from 'react-icons/fa';
+import { FaWhatsapp, FaLiraSign, FaCheck } from 'react-icons/fa';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
@@ -19,6 +19,79 @@ const Home = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPayments, setIsLoadingPayments] = useState(true);
   const [isLoadingPackages, setIsLoadingPackages] = useState(true);
+  const [sentMessages, setSentMessages] = useState({});
+
+  // LocalStorage'dan verileri yükle ve eski tarihleri temizle
+  const cleanupOldData = () => {
+    const savedMessages = JSON.parse(localStorage.getItem('sentWhatsAppMessages') || '{}');
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD formatı
+    
+    // Bugünden önceki tüm tarihleri temizle
+    const updatedMessages = {};
+    for (const date in savedMessages) {
+      if (date >= today) {
+        updatedMessages[date] = savedMessages[date];
+      }
+    }
+    
+    localStorage.setItem('sentWhatsAppMessages', JSON.stringify(updatedMessages));
+    return updatedMessages;
+  };
+
+  // Mesaj durumunu kontrol et
+  const isMessageSent = (participantId) => {
+    const today = new Date().toISOString().split('T')[0];
+    return sentMessages[today]?.includes(participantId) || false;
+  };
+
+  // Mesaj durumunu değiştir
+  const toggleMessageSent = (participantId, event) => {
+    // Tıklama olayı olduğunda event parametresini durdurmamız gerekecek
+    if (event) {
+      event.preventDefault(); // Eğer event parametresi varsa, varsayılan davranışı engelle
+      event.stopPropagation(); // Event yayılımını engelle
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    const updatedMessages = {...sentMessages};
+    
+    if (!updatedMessages[today]) {
+      updatedMessages[today] = [];
+    }
+    
+    // Toggle işlemi - eğer varsa sil, yoksa ekle
+    if (updatedMessages[today].includes(participantId)) {
+      updatedMessages[today] = updatedMessages[today].filter(id => id !== participantId);
+    } else {
+      updatedMessages[today].push(participantId);
+    }
+    
+    setSentMessages(updatedMessages);
+    localStorage.setItem('sentWhatsAppMessages', JSON.stringify(updatedMessages));
+  };
+
+  // Yeni fonksiyon: Sadece mesaj gönderildi olarak işaretle (silme yapma)
+  const addMessageSent = (participantId) => {
+    const today = new Date().toISOString().split('T')[0];
+    const updatedMessages = {...sentMessages};
+    
+    if (!updatedMessages[today]) {
+      updatedMessages[today] = [];
+    }
+    
+    // Eğer zaten mesaj gönderilmişse, tekrar ekleme
+    if (!updatedMessages[today].includes(participantId)) {
+      updatedMessages[today].push(participantId);
+      setSentMessages(updatedMessages);
+      localStorage.setItem('sentWhatsAppMessages', JSON.stringify(updatedMessages));
+    }
+  };
+
+  // Component mount olduğunda lokalden verileri yükle
+  useEffect(() => {
+    const currentMessages = cleanupOldData();
+    setSentMessages(currentMessages);
+  }, []);
 
   // Yarınki dersleri ve katılımcıları çeken fonksiyon
   const fetchTomorrowEvents = async () => {
@@ -279,12 +352,12 @@ const Home = () => {
                 <div className="p-5">
                   {/* Kart Başlığı */}
                   <div className="flex items-start justify-between pb-4 border-b border-[#d2d2d7] dark:border-[#2a3241]">
-              <div>
+                    <div>
                       <h3 className="text-[15px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-2">
                         {format(new Date(event.event_date), 'HH:mm', { locale: tr })}
                         <span className="text-[#6e6e73] dark:text-[#86868b]">|</span>
                         {event.age_group}
-                </h3>
+                      </h3>
                       <p className="text-[13px] text-[#6e6e73] dark:text-[#86868b] mt-0.5">
                         Kapasite: {event.current_capacity}/5
                       </p>
@@ -342,20 +415,44 @@ const Home = () => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
+                                {/* Tik işareti sol tarafta ve sadece mesaj gönderildiğinde görünür */}
+                                {isMessageSent(participant.id) && (
+                                  <button 
+                                    onClick={(e) => toggleMessageSent(participant.id, e)}
+                                    className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0071e3]/10 text-[#0071e3] dark:bg-[#0071e3]/20 dark:text-[#0071e3] border border-[#0071e3]/30 hover:bg-[#0071e3]/20 dark:hover:bg-[#0071e3]/30 transition-colors cursor-pointer"
+                                    title="Mesaj Gönderildi - Kaldırmak için tıklayın"
+                                  >
+                                    <FaCheck className="w-3 h-3" />
+                                  </button>
+                                )}
+                                
                                 <a 
-                                  href={`https://wa.me/90${participant.registrations.parent_phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(`Merhabalar ${participant.registrations.parent_name} Hanım. Yarın ${format(new Date(event.event_date), 'HH:mm', { locale: tr })} saatinde ${eventTypeLabels[event.event_type]} etkinliği vardır. Bu bir hatırlatma mesajıdır.`)}`}
+                                  href={`https://wa.me/90${participant.registrations.parent_phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(`Merhaba ${participant.registrations.parent_name} Hanım 😊
+Çocuğunuzun etkinliğimizde bize katılacak olmasından büyük mutluluk duyuyoruz! İşte rezervasyonunuzla ilgili detaylar:
+* Etkinlik Tarihi: ${format(new Date(event.event_date), 'd MMMM yyyy', { locale: tr })} (Yarın)
+* Saat: ${format(new Date(event.event_date), 'HH:mm', { locale: tr })} 
+* Etkinlik: ${eventTypeLabels[event.event_type]} 
+* Yer: Ritim İstanbul B blok Kat:1 Ofis 237
+* Süre: 45-60 dk
+Etkinlik sırasında çocuklarınızı güvende tutmak için gerekli tüm önlemleri aldık. Lütfen çocuğunuzun rahat kıyafetlerle gelmesini sağlayın ve yanlarına bir su şişesi ve küçük bir atıştırmalık getirmeyi unutmayın. Yedek kıyafet yada aktivite önlüğü getirmenizi tavsiye ederiz.
+Rezervasyonunuzun iptali için lütfen bir gün önceden bizi bilgilendiriniz. Rezervasyonunuza saatinde gelmenizi rica ederiz. 
+Eğer herhangi bir sorunuz varsa, lütfen bize ulaşmaktan çekinmeyin.
+Sizleri ve çocuğunuzu atölyemizde görmek için sabırsızlanıyoruz!
+Sevgilerle,
+HelloKido Oyun Atölyesi 🌸`)}`}
+                                  onClick={() => addMessageSent(participant.id)}
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] transition-colors"
+                                  className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors"
                                   title="WhatsApp'tan Hatırlatma Mesajı Gönder"
                                 >
                                   <FaWhatsapp className="w-4 h-4" />
                                 </a>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -393,15 +490,15 @@ const Home = () => {
                   <div className="h-[18px] bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md w-48 relative overflow-hidden">
                     <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
                   </div>
-      </div>
+                </div>
 
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="p-5 flex items-center justify-between border-b border-[#d2d2d7] dark:border-[#2a3241] last:border-b-0">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] relative overflow-hidden">
                         <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
-                      </div>
-                      <div>
+              </div>
+              <div>
                         <div className="h-5 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md w-40 mb-1.5 relative overflow-hidden">
                           <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
                         </div>
@@ -436,8 +533,8 @@ const Home = () => {
                   <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white">
                     Toplam {pendingPayments.length} bekleyen ödeme
                   </h3>
-      </div>
-
+                </div>
+                
                 {pendingPayments.map((registration) => (
                   <div 
                     key={registration.id}
@@ -464,17 +561,17 @@ const Home = () => {
                         href={`https://wa.me/90${registration.parent_phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(`Merhabalar ${registration.parent_name}. ${registration.student_name} için ödeme beklemekteyiz. Bilginize sunarız.`)}`}
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] transition-colors"
+                        className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors"
                         title="WhatsApp'tan Ödeme Hatırlatma Mesajı Gönder"
                       >
                         <FaWhatsapp className="w-4 h-4" />
                       </a>
-                    </div>
-                  </div>
-                ))}
+            </div>
+          </div>
+        ))}
               </div>
             )}
-          </div>
+      </div>
 
           {/* Paket Süresi Bitmeye Yaklaşanlar Bölümü */}
           <div>
@@ -594,7 +691,7 @@ const Home = () => {
                           href={`https://wa.me/90${registration.parent_phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(`Merhabalar ${registration.parent_name}. ${registration.student_name} adlı öğrencinizin paket süresi ${format(endDate, 'd MMMM yyyy', { locale: tr })} tarihinde sona erecektir. Bilginize sunarız.`)}`}
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] transition-colors"
+                          className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors"
                           title="WhatsApp'tan Paket Bitiş Bilgisi Gönder"
                         >
                           <FaWhatsapp className="w-4 h-4" />

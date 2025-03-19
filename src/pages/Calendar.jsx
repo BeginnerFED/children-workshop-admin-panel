@@ -1029,7 +1029,7 @@ const Calendar = () => {
   return (
     <div className="min-h-screen text-[#1d1d1f] dark:text-[#f5f5f7]">
       {/* Header */}
-      <div className="flex sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0 bg-white dark:bg-[#121621] mb-6">
+      <div className="flex sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0 bg-white dark:bg-[#121621] mb-6 rounded-t-xl">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-medium text-[#1d1d1f] dark:text-white">
             Takvim
