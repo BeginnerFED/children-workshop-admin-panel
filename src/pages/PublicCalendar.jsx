@@ -41,25 +41,29 @@ const PublicCalendar = () => {
       case 'ingilizce':
         return {
           color: '#8b5cf6',
-          icon: '📚',
+          icon: '🌐',
+          svgIcon: true,
           label: 'İngilizce'
         };
       case 'duyusal':
         return {
           color: '#f97316',
           icon: '🎨',
+          svgIcon: false,
           label: 'Duyusal'
         };
       case 'ozel':
         return {
           color: '#059669',
           icon: '⭐',
+          svgIcon: false,
           label: 'Özel'
         };
       default:
         return {
           color: '#6b7280',
           icon: '📅',
+          svgIcon: false,
           label: type
         };
     }
@@ -166,7 +170,7 @@ const PublicCalendar = () => {
               ←
             </button>
             <h2 className="flex-1 text-center text-base font-bold text-purple-800 bg-purple-100 mx-2 px-4 py-1.5 rounded-full">
-              {format(weekDays[0], 'd MMMM', { locale: tr })} - {format(weekDays[6], 'd MMMM yyyy', { locale: tr })}
+              {format(weekDays[0], 'd MMMM', { locale: tr })} - {format(weekDays[6], 'd MMMM', { locale: tr })}
             </h2>
             <button
               onClick={() => navigateWeek('next')}
@@ -300,7 +304,7 @@ const PublicCalendar = () => {
                 <div className="flex items-center gap-3">
                   {hasEvents && (
                     <span className="bg-gradient-to-r from-pink-500 to-purple-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-md">
-                      {dayEvents.length} etkinlik 👶
+                      {dayEvents.length} etkinlik
                     </span>
                   )}
                   <svg
@@ -329,7 +333,8 @@ const PublicCalendar = () => {
                   ) : (
                     dayEvents.map(event => {
                       const typeDetails = getEventTypeDetails(event.event_type);
-                      const availableSpots = event.max_capacity - event.current_capacity;
+                      // Maksimum kapasiteyi 5 kişi olarak hesapla (gerçekte 10 olsa bile)
+                      const availableSpots = 5 - event.current_capacity;
                       const hasSpots = availableSpots > 0;
                       
                       return (
@@ -343,7 +348,15 @@ const PublicCalendar = () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="text-xl">{typeDetails.icon}</span>
+                              <span className="text-xl">
+                                {typeDetails.svgIcon ? (
+                                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+                                  </svg>
+                                ) : (
+                                  typeDetails.icon
+                                )}
+                              </span>
                               <span className="font-bold text-sm bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
                                 {typeDetails.label}
                               </span>
@@ -361,7 +374,7 @@ const PublicCalendar = () => {
                                 ? 'bg-green-100 text-green-700' 
                                 : 'bg-red-100 text-red-700'
                             }`}>
-                              {hasSpots ? `${availableSpots} kişilik kontenjan 🎉` : 'Kontenjan doldu 🎈'}
+                              {hasSpots ? `${availableSpots} kişilik kontenjan kaldı` : 'Dolu'}
                             </div>
                           </div>
                         </div>

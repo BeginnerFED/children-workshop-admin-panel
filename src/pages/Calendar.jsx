@@ -4,7 +4,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import trLocale from '@fullcalendar/core/locales/tr';
-import { PlusIcon, UserGroupIcon, ClockIcon, AcademicCapIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, UserGroupIcon, ClockIcon, AcademicCapIcon, DocumentDuplicateIcon, CalendarDaysIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import CreateEvent from '../components/CreateEvent';
 import UpdateEventSheet from '../components/UpdateEventSheet';
 import CopyWeekModal from '../components/CopyWeekModal';
@@ -1029,13 +1029,23 @@ const Calendar = () => {
   return (
     <div className="min-h-screen text-[#1d1d1f] dark:text-[#f5f5f7]">
       {/* Header */}
-      <div className="flex sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0 bg-white dark:bg-[#121621] mb-6 rounded-t-xl">
+      <div className="flex flex-wrap sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0 bg-white dark:bg-[#121621] mb-6 rounded-t-xl">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-medium text-[#1d1d1f] dark:text-white">
             Takvim
           </h1>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
+          <a 
+            href="/children-workshop-admin-panel/#/public-calendar" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="h-10 sm:h-8 px-3 bg-purple-100 dark:bg-purple-800/20 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800/30 focus:outline-none transition-all duration-200 flex items-center justify-center gap-1.5 w-full sm:w-auto transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <CalendarDaysIcon className="w-3.5 h-3.5" />
+            <span>Herkese Açık Takvim</span>
+            <ArrowTopRightOnSquareIcon className="w-3 h-3" />
+          </a>
           <button
             onClick={() => {
               setSelectedTime({
