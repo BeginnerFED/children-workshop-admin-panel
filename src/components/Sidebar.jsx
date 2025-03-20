@@ -9,21 +9,16 @@ import {
   QueueListIcon, 
   DocumentTextIcon,
   Cog6ToothIcon,
-  SunIcon,
-  MoonIcon,
   ArrowRightOnRectangleIcon,
-  GlobeAltIcon,
   XMarkIcon,
   LightBulbIcon
 } from '@heroicons/react/24/outline';
 import { FaChild } from 'react-icons/fa';
-import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 
 const Sidebar = ({ onClose }) => {
-  const { isDark, toggleTheme } = useTheme();
-  const { language, toggleLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const [userEmail, setUserEmail] = useState('');
@@ -111,39 +106,12 @@ const Sidebar = ({ onClose }) => {
 
         {/* Settings and User Profile */}
         <div className="mt-auto space-y-3 flex-shrink-0">
-          {/* Language Toggle */}
-          <div className={`flex items-center justify-between h-[42px] p-2 rounded-lg bg-gray-200 dark:bg-[#161b2c] transition-all duration-300 hover:bg-gray-300 dark:hover:bg-[#1c2438]`}>
-            <div className="flex items-center space-x-2 min-w-0">
-              <GlobeAltIcon className="w-5 h-5 flex-shrink-0" />
-              <span className="truncate">{t('language')}</span>
-            </div>
-            <button
-              onClick={toggleLanguage}
-              className={`h-[26px] px-3 rounded text-sm font-medium bg-white dark:bg-[#0c111c] shadow transition-all duration-300 ml-2 flex-shrink-0 hover:shadow-md active:scale-95 hover:bg-gray-50 dark:hover:bg-[#161b2c]`}
-            >
-              {language.toUpperCase()}
-            </button>
-          </div>
-
-          {/* Theme Toggle */}
-          <div className={`flex items-center justify-between h-[42px] p-2 rounded-lg bg-gray-200 dark:bg-[#161b2c] transition-all duration-300 hover:bg-gray-300 dark:hover:bg-[#1c2438]`}>
-            <span className="truncate">{t('theme')}</span>
-            <button
-              onClick={toggleTheme}
-              className={`h-[26px] w-[26px] flex items-center justify-center rounded-lg ${
-                isDark 
-                  ? 'bg-[#0c111c] text-yellow-400 hover:bg-[#161b2c]' 
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              } shadow transition-all duration-300 ml-2 flex-shrink-0 hover:shadow-md active:scale-95`}
-            >
-              {isDark ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
-            </button>
-          </div>
-
           {/* Settings */}
           <Link
             to="/settings"
-            className={`flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-[#161b2c] transition-colors duration-300`}
+            className={`flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-[#161b2c] transition-colors duration-300 ${
+              location.pathname === '/settings' ? 'bg-gray-200 dark:bg-[#161b2c]' : ''
+            }`}
             onClick={() => onClose()}
           >
             <Cog6ToothIcon className="w-5 h-5 flex-shrink-0" />

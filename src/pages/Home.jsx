@@ -428,18 +428,18 @@ const Home = () => {
                                 
                                 <a 
                                   href={`https://wa.me/90${participant.registrations.parent_phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(`Merhaba ${participant.registrations.parent_name} Hanım 😊
-Çocuğunuzun etkinliğimizde bize katılacak olmasından büyük mutluluk duyuyoruz! İşte rezervasyonunuzla ilgili detaylar:
-* Etkinlik Tarihi: ${format(new Date(event.event_date), 'd MMMM yyyy', { locale: tr })} (Yarın)
-* Saat: ${format(new Date(event.event_date), 'HH:mm', { locale: tr })} 
-* Etkinlik: ${eventTypeLabels[event.event_type]} 
-* Yer: Ritim İstanbul B blok Kat:1 Ofis 237
-* Süre: 45-60 dk
-Etkinlik sırasında çocuklarınızı güvende tutmak için gerekli tüm önlemleri aldık. Lütfen çocuğunuzun rahat kıyafetlerle gelmesini sağlayın ve yanlarına bir su şişesi ve küçük bir atıştırmalık getirmeyi unutmayın. Yedek kıyafet yada aktivite önlüğü getirmenizi tavsiye ederiz.
-Rezervasyonunuzun iptali için lütfen bir gün önceden bizi bilgilendiriniz. Rezervasyonunuza saatinde gelmenizi rica ederiz. 
-Eğer herhangi bir sorunuz varsa, lütfen bize ulaşmaktan çekinmeyin.
-Sizleri ve çocuğunuzu atölyemizde görmek için sabırsızlanıyoruz!
-Sevgilerle,
-HelloKido Oyun Atölyesi 🌸`)}`}
+                                          Çocuğunuzun etkinliğimizde bize katılacak olmasından büyük mutluluk duyuyoruz! İşte rezervasyonunuzla ilgili detaylar:
+                                          * Etkinlik Tarihi: ${format(new Date(event.event_date), 'd MMMM yyyy', { locale: tr })} (Yarın)
+                                          * Saat: ${format(new Date(event.event_date), 'HH:mm', { locale: tr })} 
+                                          * Etkinlik: ${eventTypeLabels[event.event_type]} 
+                                          * Yer: Ritim İstanbul B blok Kat:1 Ofis 237
+                                          * Süre: 45-60 dk
+                                          Etkinlik sırasında çocuklarınızı güvende tutmak için gerekli tüm önlemleri aldık. Lütfen çocuğunuzun rahat kıyafetlerle gelmesini sağlayın ve yanlarına bir su şişesi ve küçük bir atıştırmalık getirmeyi unutmayın. Yedek kıyafet yada aktivite önlüğü getirmenizi tavsiye ederiz.
+                                          Rezervasyonunuzun iptali için lütfen bir gün önceden bizi bilgilendiriniz. Rezervasyonunuza saatinde gelmenizi rica ederiz. 
+                                          Eğer herhangi bir sorunuz varsa, lütfen bize ulaşmaktan çekinmeyin.
+                                          Sizleri ve çocuğunuzu atölyemizde görmek için sabırsızlanıyoruz!
+                                          Sevgilerle,
+                                          HelloKido Oyun Atölyesi 🌸`)}`}
                                   onClick={() => addMessageSent(participant.id)}
                                   target="_blank" 
                                   rel="noopener noreferrer"

@@ -9,6 +9,7 @@ const IdeaCenter = () => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [fadeClass, setFadeClass] = useState('opacity-100');
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const { user } = useAuth();
 
   // Loading mesajları
@@ -64,15 +65,27 @@ const IdeaCenter = () => {
     }
   }, [isLoading]);
 
+  // Mesaj gönderildiğinde scroll
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
   };
 
+  // Sadece yeni mesaj eklendiğinde veya streaming mesaj geldiğinde scroll yap
   useEffect(() => {
-    if (messages.length > 0 || currentStreamingMessage) {
+    // Sadece mesaj dizisi değiştiğinde scroll yap
+    if (messages.length > 0) {
       scrollToBottom();
     }
-  }, [messages, currentStreamingMessage]);
+  }, [messages.length]);
+
+  // Streaming mesaj güncellendiğinde scroll
+  useEffect(() => {
+    if (currentStreamingMessage) {
+      scrollToBottom();
+    }
+  }, [currentStreamingMessage]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -87,6 +100,9 @@ const IdeaCenter = () => {
     setInput('');
     setIsLoading(true);
     setCurrentStreamingMessage('');
+
+    // Kullanıcı mesajı gönderdikten sonra scroll yap
+    setTimeout(scrollToBottom, 100);
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -158,7 +174,7 @@ const IdeaCenter = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] lg:h-[calc(100vh-120px)] max-w-4xl mx-auto flex flex-col">
+    <div className="h-[calc(100vh-100px)] lg:h-[calc(100vh-50px)] max-w-4xl mx-auto flex flex-col">
       {/* Header */}
       <div className="shrink-0 py-4 px-6 border-b border-gray-200 dark:border-[#2a3241]">
         <h2 className="text-xl font-semibold text-[#1d1d1f] dark:text-white">Fikir Merkezi</h2>
@@ -170,7 +186,7 @@ const IdeaCenter = () => {
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 6.94a.75.75 0 11-1.061-1.061 3 3 0 112.871 5.026v.345a.75.75 0 01-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 108.94 6.94zM10 15a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
               </svg>
             </button>
-            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block z-50">
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block z-50">
               <div className="bg-gray-800 text-white text-sm py-2 px-3 rounded-lg shadow-lg whitespace-nowrap min-w-[240px]">
                 <div className="mb-2">
                   <span className="font-semibold">Yapay Zeka Modeli:</span>
@@ -178,16 +194,16 @@ const IdeaCenter = () => {
                 </div>
                 <p className="text-gray-300 text-xs">Sistem yoğunluğuna bağlı olarak yapay zekanın cevap vermesi uzun sürebilir.</p>
               </div>
-              <div className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-800 transform rotate-45"></div>
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 transform rotate-45"></div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Chat Container */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto px-6 py-4" style={{ scrollbarWidth: 'thin' }}>
-          <div className="space-y-4">
+      <div className="flex-1 relative overflow-hidden">
+        <div className="absolute inset-0 overflow-y-auto px-6 py-4" style={{ scrollbarWidth: 'thin' }}>
+          <div className="space-y-4 pb-2">
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -257,8 +273,8 @@ const IdeaCenter = () => {
         </div>
       </div>
 
-      {/* Input Area */}
-      <div className="shrink-0 p-4 border-t border-gray-200 dark:border-[#2a3241]">
+      {/* Input Area - sabit alt konumu */}
+      <div className="shrink-0 p-4 border-t border-gray-200 dark:border-[#2a3241] mt-auto">
         <form onSubmit={sendMessage} className="flex gap-2">
           <div className="flex-1 relative">
             <input
