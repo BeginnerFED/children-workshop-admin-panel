@@ -71,31 +71,55 @@ export default function UpdateEventSheet({ isOpen, onClose, onSuccess, eventId }
         if (eventError) throw eventError;
         setEventData(event);
 
-        // Etkinliğe kayıtlı katılımcıları getir
+        // Etkinliğe kayıtlı katılımcıları getir - ilişkisel sorgu yerine manuel işlem
         const { data: participants, error: participantsError } = await supabase
           .from('event_participants')
-          .select(`
-            registration_id,
-            registrations:registration_id (
-              id, student_name, student_age, parent_name
-            )
-          `)
+          .select('registration_id')
           .eq('event_id', eventId);
 
         if (participantsError) throw participantsError;
-
+        
         // Etkinliğin tarih bilgilerini ayarla
         const eventDate = new Date(event.event_date);
         
         // Kopyalama modu için varsayılan tarihi etkinliğin kendi tarihi olarak ayarla
         setCopyDate(new Date(eventDate));
         
+        // Katılımcı yoksa boş bir dizi ile devam et
+        if (!participants || participants.length === 0) {
+          setFormData({
+            date: eventDate,
+            time: {
+              hour: eventDate.getHours().toString().padStart(2, '0'),
+              minute: eventDate.getMinutes().toString().padStart(2, '0')
+            },
+            ageGroup: event.age_group,
+            eventType: event.event_type,
+            customDescription: event.custom_description || '',
+            students: []
+          });
+          
+          setSelectedStudents([]);
+          return;
+        }
+        
+        // Katılımcıların registration_id'lerini çıkar
+        const registrationIds = participants.map(p => p.registration_id);
+        
+        // Kayıt bilgilerini çek
+        const { data: registrations, error: registrationsError } = await supabase
+          .from('registrations')
+          .select('id, student_name, student_age, parent_name')
+          .in('id', registrationIds);
+          
+        if (registrationsError) throw registrationsError;
+
         // Kayıtlı katılımcıları düzenle
-        const eventStudents = participants.map(p => ({
-          value: p.registrations.id,
-          label: p.registrations.student_name,
-          parent: p.registrations.parent_name,
-          age: p.registrations.student_age
+        const eventStudents = registrations.map(reg => ({
+          value: reg.id,
+          label: reg.student_name,
+          parent: reg.parent_name,
+          age: reg.student_age
         }));
 
         // Form verilerini güncelle
