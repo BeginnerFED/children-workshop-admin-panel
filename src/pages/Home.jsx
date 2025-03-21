@@ -120,28 +120,49 @@ const Home = () => {
       
       if (eventsError) throw eventsError;
       
-      // Her ders için katılımcıları getir
+      // Her ders için katılımcıları getir - ilişkisel sorgu yerine manuel işlemler yapacağız
       const eventsWithParticipants = await Promise.all(events.map(async (event) => {
+        // 1. Önce event_participants tablosundan katılımcıları çek
         const { data: participants, error: participantsError } = await supabase
           .from('event_participants')
-          .select(`
-            *,
-            registrations:registration_id (
-              student_name,
-              student_age,
-              parent_name,
-              parent_phone
-            )
-          `)
+          .select('*')
           .eq('event_id', event.id)
           .eq('status', 'scheduled')
           .order('created_at');
         
         if (participantsError) throw participantsError;
         
+        // Katılımcı yoksa, hemen boş bir dizi döndür
+        if (!participants || participants.length === 0) {
+          return {
+            ...event,
+            participants: []
+          };
+        }
+        
+        // 2. Katılımcıların registration_id'lerini çıkar
+        const registrationIds = participants.map(p => p.registration_id);
+        
+        // 3. Bu registration_id'ler için registrations tablosundan bilgileri çek
+        const { data: registrations, error: registrationsError } = await supabase
+          .from('registrations')
+          .select('id, student_name, student_age, parent_name, parent_phone')
+          .in('id', registrationIds);
+        
+        if (registrationsError) throw registrationsError;
+        
+        // 4. Kayıt bilgilerini katılımcılarla birleştir
+        const participantsWithDetails = participants.map(participant => {
+          const registration = registrations.find(r => r.id === participant.registration_id);
+          return {
+            ...participant,
+            registrations: registration // Yapı önceki ile uyumlu olması için "registrations" olarak bırakıyoruz
+          };
+        });
+        
         return {
           ...event,
-          participants: participants || []
+          participants: participantsWithDetails || []
         };
       }));
       
@@ -161,7 +182,7 @@ const Home = () => {
       // Ödemesi beklemede olan kayıtları çek
       const { data, error } = await supabase
         .from('registrations')
-        .select('*, event_participants(event_id, events:event_id(event_date, age_group, event_type))')
+        .select('*')
         .eq('payment_status', 'beklemede')
         .order('created_at', { ascending: false });
       
@@ -548,6 +569,7 @@ HelloKido Oyun Atölyesi 🌸`)}`}
                   </h3>
                 </div>
                 
+                <div className="max-h-[350px] overflow-y-auto">
                 {pendingPayments.map((registration) => (
                   <div 
                     key={registration.id}
@@ -579,9 +601,10 @@ HelloKido Oyun Atölyesi 🌸`)}`}
                       >
                         <FaWhatsapp className="w-4 h-4" />
                       </a>
-            </div>
-          </div>
-        ))}
+                    </div>
+                  </div>
+                ))}
+                </div>
               </div>
             )}
       </div>
@@ -660,6 +683,7 @@ HelloKido Oyun Atölyesi 🌸`)}`}
                   </h3>
                 </div>
                 
+                <div className="max-h-[350px] overflow-y-auto">
                 {expiringSoonPackages.map((registration) => {
                   // Kalan gün sayısını hesapla
                   const endDate = new Date(registration.package_end_date);
@@ -715,6 +739,7 @@ HelloKido Oyun Atölyesi 🌸`)}`}
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
