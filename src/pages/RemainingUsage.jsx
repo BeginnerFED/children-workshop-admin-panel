@@ -33,14 +33,78 @@ const RemainingUsage = () => {
   const fetchStudents = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('student_usage_summary')
+      
+      // First, fetch registrations that are active
+      const { data: registrationsData, error: registrationsError } = await supabase
+        .from('registrations')
         .select('*')
         .eq('is_active', true)
         .order('student_name');
 
-      if (error) throw error;
-      setStudents(data || []);
+      if (registrationsError) throw registrationsError;
+      
+      // If registrations found, fetch additional data to calculate usage statistics
+      if (registrationsData && registrationsData.length > 0) {
+        const studentIds = registrationsData.map(reg => reg.id);
+        
+        // Get event participants data for these registrations to calculate attendance stats
+        const { data: participantsData, error: participantsError } = await supabase
+          .from('event_participants')
+          .select('*')
+          .in('registration_id', studentIds);
+        
+        if (participantsError) throw participantsError;
+        
+        // Process data to construct student_usage_summary for each registration
+        const processedStudents = registrationsData.map(registration => {
+          // Get all participants for this registration
+          const studentParticipants = participantsData.filter(p => 
+            p.registration_id === registration.id
+          );
+          
+          // Calculate statistics
+          const attendedLessons = studentParticipants.filter(p => p.status === 'attended').length;
+          const noShowLessons = studentParticipants.filter(p => p.status === 'no_show').length;
+          const makeupCompleted = studentParticipants.filter(p => p.status === 'makeup').length;
+          const scheduledLessons = studentParticipants.filter(p => p.status === 'scheduled').length;
+          const postponedLessons = studentParticipants.filter(p => p.status === 'postponed').length;
+          
+          // Calculate remaining lessons (total lessons - (attended + scheduled + no_show + makeup))
+          let totalLessons = 0;
+          switch(registration.package_type) {
+            case 'hafta-1': totalLessons = 4; break;
+            case 'hafta-2': totalLessons = 8; break;
+            case 'hafta-3': totalLessons = 12; break;
+            case 'hafta-4': totalLessons = 16; break;
+            case 'tek-seferlik': totalLessons = 1; break;
+            default: totalLessons = 0;
+          }
+          
+          // Count these lesson statuses as "used" lessons
+          const usedLessons = attendedLessons + scheduledLessons + noShowLessons + makeupCompleted;
+          const remainingLessons = Math.max(totalLessons - usedLessons, 0);
+          
+          return {
+            registration_id: registration.id,
+            student_name: registration.student_name,
+            parent_name: registration.parent_name,
+            package_type: registration.package_type,
+            package_start_date: registration.package_start_date,
+            package_end_date: registration.package_end_date,
+            payment_status: registration.payment_status,
+            is_active: registration.is_active,
+            remaining_lessons: remainingLessons,
+            attended_lessons: attendedLessons,
+            no_show_lessons: noShowLessons,
+            makeup_completed: makeupCompleted,
+            postponed_lessons: postponedLessons
+          };
+        });
+        
+        setStudents(processedStudents);
+      } else {
+        setStudents([]);
+      }
     } catch (error) {
       console.error('Error fetching students:', error);
     } finally {
@@ -50,14 +114,63 @@ const RemainingUsage = () => {
 
   const fetchStudentDetails = async (registrationId) => {
     try {
-      const { data, error } = await supabase
-        .from('student_usage_summary')
+      // First get registration details
+      const { data: registrationData, error: registrationError } = await supabase
+        .from('registrations')
         .select('*')
-        .eq('registration_id', registrationId)
+        .eq('id', registrationId)
         .single();
-
-      if (error) throw error;
-      setStudentDetails(data);
+      
+      if (registrationError) throw registrationError;
+      
+      // Get event participants for this registration to calculate stats
+      const { data: participantsData, error: participantsError } = await supabase
+        .from('event_participants')
+        .select('*')
+        .eq('registration_id', registrationId);
+      
+      if (participantsError) throw participantsError;
+      
+      // Calculate statistics
+      const attendedLessons = participantsData.filter(p => p.status === 'attended').length;
+      const noShowLessons = participantsData.filter(p => p.status === 'no_show').length;
+      const makeupCompleted = participantsData.filter(p => p.status === 'makeup').length;
+      const scheduledLessons = participantsData.filter(p => p.status === 'scheduled').length;
+      const postponedLessons = participantsData.filter(p => p.status === 'postponed').length;
+      
+      // Calculate remaining lessons based on package type
+      let totalLessons = 0;
+      switch(registrationData.package_type) {
+        case 'hafta-1': totalLessons = 4; break;
+        case 'hafta-2': totalLessons = 8; break;
+        case 'hafta-3': totalLessons = 12; break;
+        case 'hafta-4': totalLessons = 16; break;
+        case 'tek-seferlik': totalLessons = 1; break;
+        default: totalLessons = 0;
+      }
+      
+      // Count these lesson statuses as "used" lessons
+      const usedLessons = attendedLessons + scheduledLessons + noShowLessons + makeupCompleted;
+      const remainingLessons = Math.max(totalLessons - usedLessons, 0);
+      
+      // Construct student details object
+      const studentDetails = {
+        registration_id: registrationData.id,
+        student_name: registrationData.student_name,
+        parent_name: registrationData.parent_name,
+        package_type: registrationData.package_type,
+        package_start_date: registrationData.package_start_date,
+        package_end_date: registrationData.package_end_date,
+        payment_status: registrationData.payment_status,
+        is_active: registrationData.is_active,
+        remaining_lessons: remainingLessons,
+        attended_lessons: attendedLessons,
+        no_show_lessons: noShowLessons,
+        makeup_completed: makeupCompleted,
+        postponed_lessons: postponedLessons
+      };
+      
+      setStudentDetails(studentDetails);
     } catch (error) {
       console.error('Error fetching student details:', error);
     }
