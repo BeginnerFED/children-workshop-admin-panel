@@ -74,7 +74,7 @@ function App() {
                         <main className={`
                           flex-1 h-full overflow-y-auto
                           transition-all duration-300
-                          ${isMobile ? 'w-full' : 'w-[calc(100%-256px)]'}
+                          ${isMobile ? 'w-full pb-[50px]' : 'w-[calc(100%-256px)] pb-[30px]'}
                           ${isMobile && isSidebarOpen ? 'overflow-hidden' : ''}
                           m-[10px_10px_10px_10px] lg:m-[15px_10px_15px_0px]
                         `}>
@@ -92,7 +92,7 @@ function App() {
                             </div>
                           </div>
 
-                          <div className="bg-white dark:bg-[#1a1f2e] border border-[#E2E4E9] dark:border-[#2a3241] rounded-xl min-h-[calc(100%-30px)]">
+                          <div className="bg-white dark:bg-[#1a1f2e] border border-[#E2E4E9] dark:border-[#2a3241] rounded-xl min-h-[calc(100%-0px)]">
                             {/* Routes */}
                             <Routes>
                               <Route path="/" element={<Home />} />

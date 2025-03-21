@@ -40,14 +40,14 @@ const Settings = () => {
   );
 
   return (
-    <div className="h-[calc(100vh-100px)] lg:h-[calc(100vh-50px)] w-full flex flex-col">
+    <div className="w-full">
       {/* Header */}
-      <div className="shrink-0 py-4 px-6 border-b border-gray-200 dark:border-[#2a3241]">
+      <div className="py-4 px-6 border-b border-gray-200 dark:border-[#2a3241]">
         <h2 className="text-xl font-medium text-[#1d1d1f] dark:text-white">Ayarlar</h2>
       </div>
 
       {/* Settings Content */}
-      <div className="flex-1 overflow-auto px-6 py-6">
+      <div className="px-6 py-6">
         
           {/* Görünüm Ayarları Kategorisi */}
           <SettingCategory 

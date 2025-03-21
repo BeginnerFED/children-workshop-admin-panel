@@ -248,13 +248,13 @@ const Home = () => {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0">
+      <div className="flex items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0">
           <div>
             <h1 className="text-xl font-medium text-[#1d1d1f] dark:text-white">Anasayfa</h1>
           </div>
           <div className="flex items-center">
             <div className="text-sm text-[#6e6e73] dark:text-[#86868b]">
-              Bugünün Tarihi: <span className="font-semibold text-[#1d1d1f] dark:text-white">{format(new Date(), 'd MMMM yyyy', { locale: tr })}</span>
+              Bugün: <span className="font-semibold text-[#1d1d1f] dark:text-white">{format(new Date(), 'd MMMM yyyy', { locale: tr })}</span>
             </div>
           </div>
       </div>
@@ -264,15 +264,17 @@ const Home = () => {
         {/* Yarınki Dersler Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-[#0071e3]/10 border border-[#0071e3]/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-[#0071e3]/10 border border-[#0071e3]/20 flex items-center justify-center self-start sm:self-center">
               <CalendarDaysIcon className="h-4 w-4 text-[#0071e3]" />
             </div>
-            <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-white">
-              Yarınki Dersler
-            </h2>
-            <span className="text-sm text-[#6e6e73] dark:text-[#86868b] capitalize ml-2">
-              ({tomorrowDateString})
-            </span>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-white">
+                Yarınki Dersler
+              </h2>
+              <span className="text-sm text-[#6e6e73] dark:text-[#86868b] capitalize sm:ml-2">
+                ({tomorrowDateString})
+              </span>
+            </div>
           </div>
           <button 
             onClick={fetchTomorrowEvents} 
