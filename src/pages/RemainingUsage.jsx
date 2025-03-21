@@ -206,6 +206,25 @@ const RemainingUsage = () => {
     }
   };
 
+  // Translate lesson status
+  const translateLessonStatus = (status) => {
+    if (language === 'tr') {
+      return status === 'scheduled' ? 'Planlandı' : 
+        status === 'attended' ? 'Katıldı' : 
+        status === 'no_show' ? 'Gelmedi' : 
+        status === 'cancelled' ? 'İptal Edildi' : 
+        status === 'makeup' ? 'Telafi Dersi' : 
+        status === 'postponed' ? 'Ertelendi' : '';
+    } else {
+      return status === 'scheduled' ? 'Scheduled' : 
+        status === 'attended' ? 'Joined' : 
+        status === 'no_show' ? 'Absent' : 
+        status === 'cancelled' ? 'Cancelled' : 
+        status === 'makeup' ? 'Makeup' : 
+        status === 'postponed' ? 'Delayed' : '';
+    }
+  };
+
   return (
     <div className={`flex flex-col ${showDetailView ? 'lg:mr-96' : ''} transition-all duration-300`}>
       {/* Header */}
@@ -690,10 +709,12 @@ const RemainingUsage = () => {
                       <div className="flex items-center justify-between">
                               <div className="flex-1">
                           <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
-                                  {lesson.events.event_type === 'ingilizce' ? 'İngilizce Oyun Dersi' : 
-                                  lesson.events.event_type === 'duyusal' ? 'Duyusal Gelişim Dersi' : 
-                                  lesson.events.custom_description || 'Özel Ders'}
-                                  {lesson.is_makeup && ' (Telafi)'}
+                                  {lesson.events.event_type === 'ingilizce' 
+                                    ? language === 'tr' ? 'İngilizce Oyun Dersi' : 'English Game Class'
+                                    : lesson.events.event_type === 'duyusal' 
+                                    ? language === 'tr' ? 'Duyusal Gelişim Dersi' : 'Sensory Development Class'
+                                    : lesson.events.custom_description || (language === 'tr' ? 'Özel Ders' : 'Custom Class')}
+                                  {lesson.is_makeup && (language === 'tr' ? ' (Telafi)' : ' (Makeup)')}
                                 </span>
                                 <span className="text-xs text-[#6e6e73] dark:text-[#86868b] mt-1">
                                   {lesson.events && formatDate(lesson.events.event_date, 'dd MMMM yyyy, HH:mm')}
@@ -702,18 +723,18 @@ const RemainingUsage = () => {
                                 {/* Ek notlar */}
                                 {lesson.cancellation_reason && (
                                   <span className="block text-xs text-red-500 mt-1">
-                                    İptal sebebi: {lesson.cancellation_reason}
+                                    {language === 'tr' ? 'İptal sebebi:' : 'Cancellation reason:'} {lesson.cancellation_reason}
                                   </span>
                                 )}
                                 {lesson.makeup_notes && (
                                   <span className="block text-xs text-blue-500 mt-1">
-                                    Telafi notu: {lesson.makeup_notes}
-                          </span>
+                                    {language === 'tr' ? 'Telafi notu:' : 'Makeup note:'} {lesson.makeup_notes}
+                                  </span>
                                 )}
                                 {lesson.postponed_notes && (
                                   <span className="block text-xs text-amber-500 mt-1">
-                                    Erteleme notu: {lesson.postponed_notes}
-                          </span>
+                                    {language === 'tr' ? 'Erteleme notu:' : 'Postponement note:'} {lesson.postponed_notes}
+                                  </span>
                                 )}
                         </div>
                               
@@ -728,12 +749,7 @@ const RemainingUsage = () => {
                                     lesson.status === 'postponed' ? 'bg-amber-400/10 text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-500/20 dark:ring-amber-400/20' :
                                     'bg-gray-400/10 text-gray-700'
                                   }`}>
-                                  {lesson.status === 'scheduled' ? 'Planlandı' : 
-                                  lesson.status === 'attended' ? 'Katıldı' : 
-                                  lesson.status === 'no_show' ? 'Gelmedi' : 
-                                  lesson.status === 'cancelled' ? 'İptal Edildi' : 
-                                  lesson.status === 'makeup' ? 'Telafi Dersi' : 
-                                  lesson.status === 'postponed' ? 'Ertelendi' : ''}
+                                  {translateLessonStatus(lesson.status)}
                         </span>
                       </div>
                     </div>
@@ -753,7 +769,7 @@ const RemainingUsage = () => {
                                   : 'bg-emerald-400/5 text-emerald-700/30 ring-1 ring-emerald-500/10 dark:bg-emerald-400/5 dark:text-emerald-300/30 dark:ring-emerald-400/10 hover:bg-emerald-400/20 dark:hover:bg-emerald-400/20 hover:text-emerald-700 dark:hover:text-emerald-300'
                               } transition-colors`}
                             >
-                              {language === 'tr' ? 'Katıldı' : 'Attended'}
+                              {language === 'tr' ? 'Katıldı' : 'Joined'}
                             </button>
                             <button
                               onClick={() => updateLessonStatus(lesson.id, 'no_show')}
@@ -764,7 +780,7 @@ const RemainingUsage = () => {
                                   : 'bg-red-400/5 text-red-700/30 ring-1 ring-red-500/10 dark:bg-red-400/5 dark:text-red-300/30 dark:ring-red-400/10 hover:bg-red-400/20 dark:hover:bg-red-400/20 hover:text-red-700 dark:hover:text-red-300'
                               } transition-colors`}
                             >
-                              {language === 'tr' ? 'Gelmedi' : 'No Show'}
+                              {language === 'tr' ? 'Gelmedi' : 'Absent'}
                             </button>
                             <button
                               onClick={() => updateLessonStatus(lesson.id, 'postponed')}
@@ -775,7 +791,7 @@ const RemainingUsage = () => {
                                   : 'bg-amber-400/5 text-amber-700/30 ring-1 ring-amber-500/10 dark:bg-amber-400/5 dark:text-amber-300/30 dark:ring-amber-400/10 hover:bg-amber-400/20 dark:hover:bg-amber-400/20 hover:text-amber-700 dark:hover:text-amber-300'
                               } transition-colors`}
                             >
-                              {language === 'tr' ? 'Ertelendi' : 'Postponed'}
+                              {language === 'tr' ? 'Ertelendi' : 'Delayed'}
                             </button>
                             <button
                               onClick={() => updateLessonStatus(lesson.id, 'makeup')}
@@ -850,7 +866,7 @@ const RemainingUsage = () => {
                     </div>
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                       <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        {language === 'tr' ? 'Gelmeyen' : 'No Shows'}
+                        {language === 'tr' ? 'Gelmeyen' : 'Absents'}
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
                         {studentDetails?.no_show_lessons || 0}
