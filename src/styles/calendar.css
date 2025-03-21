@@ -26,6 +26,7 @@
   --fc-button-hover-border-color: #4b5563;
   --fc-button-active-bg-color: #3b82f6;
   --fc-button-active-border-color: #3b82f6;
+  --fc-button-light-bg-color: #1a1f2e;
 }
 
 /* Toolbar stilleri */
@@ -104,7 +105,7 @@
 
 /* Takvim başlık ve içerik stilleri */
 .fc .fc-col-header {
-  background-color: var(--fc-neutral-bg-color);
+  background-color: var(--fc-button-light-bg-color);
 }
 
 .fc .fc-col-header-cell {

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const IdeaCenter = () => {
   const [messages, setMessages] = useState([]);
@@ -11,37 +12,67 @@ const IdeaCenter = () => {
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
   const { user } = useAuth();
+  const { language } = useLanguage();
 
   // Loading mesajları
-  const loadingMessages = [
-    "Düşünüyorum...",
-    "Harika bir soru! Hemen cevaplıyorum...",
-    "Bu konuda size yardımcı olacağım...",
-    "Yanıtımı hazırlıyorum...",
-    "Bilgilerimi gözden geçiriyorum...",
-    "En iyi cevabı oluşturuyorum...",
-    "Biraz daha bekleyin, detaylı bir yanıt hazırlıyorum...",
-    "Bu soruyu cevaplamak için sabırsızlanıyorum..."
-  ];
+  const loadingMessages = language === 'tr' 
+    ? [
+      "Düşünüyorum...",
+      "Harika bir soru! Hemen cevaplıyorum...",
+      "Bu konuda size yardımcı olacağım...",
+      "Yanıtımı hazırlıyorum...",
+      "Bilgilerimi gözden geçiriyorum...",
+      "En iyi cevabı oluşturuyorum...",
+      "Biraz daha bekleyin, detaylı bir yanıt hazırlıyorum...",
+      "Bu soruyu cevaplamak için sabırsızlanıyorum..."
+    ]
+    : [
+      "Thinking...",
+      "Great question! Answering now...",
+      "I'll help you with this...",
+      "Preparing my response...",
+      "Reviewing my knowledge...",
+      "Creating the best answer...",
+      "Please wait, preparing a detailed response...",
+      "I'm eager to answer this question..."
+    ];
 
   // Örnek sorular listesi
-  const sampleQuestions = [
-    "1-2 yaş grubu için duyusal oyun önerileri verebilir misin? Özellikle dokunma duyusunu geliştirecek aktiviteler arıyorum.",
-    "3 yaş grubu için İngilizce oyun atölyemde öğretebileceğim eğlenceli bir aktivite önerir misin?",
-    "2 yaş çocuklar için müzikli ve hareketli bir İngilizce aktivite arıyorum, ne önerirsin?",
-    "4 yaş grubu için hayvan seslerini İngilizce öğretebileceğimiz eğlenceli bir oyun önerir misin?",
-    "1.5 yaş bebekler için güvenli sensory play aktiviteleri neler olabilir?",
-    "3-4 yaş grubu için basit İngilizce şarkılar eşliğinde oynayabileceğimiz oyunlar nelerdir?",
-    "2-3 yaş çocuklar için mevsim temalı duyusal oyun önerilerin neler?",
-    "4 yaş grubu için vücut parçalarını İngilizce öğretebileceğim interaktif bir aktivite arıyorum, ne önerirsin?",
-    "1-2 yaş arası çocuklar için su bazlı güvenli duyusal oyun önerileri verebilir misin?",
-    "3 yaş grubu için günlük rutinleri İngilizce öğretebileceğimiz eğlenceli aktiviteler nelerdir?",
-    "2 yaş grubu için el-göz koordinasyonunu geliştirecek duyusal oyunlar önerir misin?",
-    "4 yaş için sayıları İngilizce öğretirken kullanabileceğimiz duyusal materyal fikirleri neler olabilir?",
-    "1-3 yaş arası karışık yaş grubu için uygun sensory bin aktiviteleri nelerdir?",
-    "3-4 yaş için hava durumunu İngilizce öğretebileceğimiz eğlenceli bir aktivite önerir misin?",
-    "2 yaş çocuklar için duyu bütünleme aktiviteleri içeren İngilizce oyun önerilerin neler?"
-  ];
+  const sampleQuestions = language === 'tr'
+    ? [
+      "1-2 yaş grubu için duyusal oyun önerileri verebilir misin? Özellikle dokunma duyusunu geliştirecek aktiviteler arıyorum.",
+      "3 yaş grubu için İngilizce oyun atölyemde öğretebileceğim eğlenceli bir aktivite önerir misin?",
+      "2 yaş çocuklar için müzikli ve hareketli bir İngilizce aktivite arıyorum, ne önerirsin?",
+      "4 yaş grubu için hayvan seslerini İngilizce öğretebileceğimiz eğlenceli bir oyun önerir misin?",
+      "1.5 yaş bebekler için güvenli sensory play aktiviteleri neler olabilir?",
+      "3-4 yaş grubu için basit İngilizce şarkılar eşliğinde oynayabileceğimiz oyunlar nelerdir?",
+      "2-3 yaş çocuklar için mevsim temalı duyusal oyun önerilerin neler?",
+      "4 yaş grubu için vücut parçalarını İngilizce öğretebileceğim interaktif bir aktivite arıyorum, ne önerirsin?",
+      "1-2 yaş arası çocuklar için su bazlı güvenli duyusal oyun önerileri verebilir misin?",
+      "3 yaş grubu için günlük rutinleri İngilizce öğretebileceğimiz eğlenceli aktiviteler nelerdir?",
+      "2 yaş grubu için el-göz koordinasyonunu geliştirecek duyusal oyunlar önerir misin?",
+      "4 yaş için sayıları İngilizce öğretirken kullanabileceğimiz duyusal materyal fikirleri neler olabilir?",
+      "1-3 yaş arası karışık yaş grubu için uygun sensory bin aktiviteleri nelerdir?",
+      "3-4 yaş için hava durumunu İngilizce öğretebileceğimiz eğlenceli bir aktivite önerir misin?",
+      "2 yaş çocuklar için duyu bütünleme aktiviteleri içeren İngilizce oyun önerilerin neler?"
+    ]
+    : [
+      "Can you suggest sensory play ideas for ages 1-2? I'm looking for activities that develop the sense of touch.",
+      "Could you recommend a fun activity I can teach in my English play workshop for 3-year-olds?",
+      "I'm looking for a musical and active English activity for 2-year-olds, what do you suggest?",
+      "Can you suggest a fun game to teach animal sounds in English for a 4-year-old group?",
+      "What safe sensory play activities might work for 1.5-year-old babies?",
+      "What games can we play with simple English songs for 3-4 year olds?",
+      "What are your seasonal-themed sensory play suggestions for 2-3 year old children?",
+      "I'm looking for an interactive activity to teach body parts in English to a 4-year-old group, what do you suggest?",
+      "Can you suggest safe water-based sensory play ideas for children ages 1-2?",
+      "What are fun activities to teach daily routines in English to a 3-year-old group?",
+      "Can you suggest sensory games that develop hand-eye coordination for 2-year-olds?",
+      "What sensory material ideas could we use when teaching numbers in English for 4-year-olds?",
+      "What are appropriate sensory bin activities for mixed age groups between 1-3 years?",
+      "Can you suggest a fun activity to teach weather in English for ages 3-4?",
+      "What are your suggestions for English games with sensory integration activities for 2-year-olds?"
+    ];
 
   // Rastgele soru seçme fonksiyonu
   const getRandomQuestion = () => {
@@ -121,7 +152,7 @@ const IdeaCenter = () => {
       });
 
       if (!response.ok) {
-        throw new Error('API yanıt vermedi');
+        throw new Error(language === 'tr' ? 'API yanıt vermedi' : 'API did not respond');
       }
 
       const reader = response.body.getReader();
@@ -153,7 +184,7 @@ const IdeaCenter = () => {
 
       // Eğer fullMessage boşsa hata fırlat
       if (!fullMessage.trim()) {
-        throw new Error('Boş yanıt alındı');
+        throw new Error(language === 'tr' ? 'Boş yanıt alındı' : 'Empty response received');
       }
 
       setMessages(prev => [...prev, {
@@ -166,7 +197,9 @@ const IdeaCenter = () => {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Opss... Bir şeyler ters gitti 😔 Lütfen sorunuzu tekrar sorar mısınız? Eğer sorun devam ederse birkaç dakika bekleyip tekrar deneyebilirsiniz.'
+        content: language === 'tr' 
+          ? 'Opss... Bir şeyler ters gitti 😔 Lütfen sorunuzu tekrar sorar mısınız? Eğer sorun devam ederse birkaç dakika bekleyip tekrar deneyebilirsiniz.'
+          : 'Oops... Something went wrong 😔 Could you please ask your question again? If the problem persists, wait a few minutes and try again.'
       }]);
     }
 
@@ -177,9 +210,15 @@ const IdeaCenter = () => {
     <div className="h-[calc(100vh-100px)] lg:h-[calc(100vh-50px)] max-w-4xl mx-auto flex flex-col">
       {/* Header */}
       <div className="shrink-0 py-4 px-6 border-b border-gray-200 dark:border-[#2a3241]">
-        <h2 className="text-xl font-semibold text-[#1d1d1f] dark:text-white">Fikir Merkezi</h2>
+        <h2 className="text-xl font-semibold text-[#1d1d1f] dark:text-white">
+          {language === 'tr' ? 'Fikir Merkezi' : 'Idea Center'}
+        </h2>
         <div className="flex items-center space-x-1">
-          <p className="text-sm text-gray-500 dark:text-gray-400">Yapay zeka asistanınız size yardımcı olmak için hazır</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {language === 'tr' 
+              ? 'Yapay zeka asistanınız size yardımcı olmak için hazır' 
+              : 'Your AI assistant is ready to help you'}
+          </p>
           <div className="group relative">
             <button className="p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
@@ -189,10 +228,16 @@ const IdeaCenter = () => {
             <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block z-50">
               <div className="bg-gray-800 text-white text-sm py-2 px-3 rounded-lg shadow-lg whitespace-nowrap min-w-[240px]">
                 <div className="mb-2">
-                  <span className="font-semibold">Yapay Zeka Modeli:</span>
+                  <span className="font-semibold">
+                    {language === 'tr' ? 'Yapay Zeka Modeli:' : 'AI Model:'}
+                  </span>
                   <span className="ml-1 text-blue-300">DeepSeek R1 Lite</span>
                 </div>
-                <p className="text-gray-300 text-xs">Sistem yoğunluğuna bağlı olarak yapay zekanın cevap vermesi uzun sürebilir.</p>
+                <p className="text-gray-300 text-xs">
+                  {language === 'tr'
+                    ? 'Sistem yoğunluğuna bağlı olarak yapay zekanın cevap vermesi uzun sürebilir.'
+                    : 'The AI response may take longer depending on system load.'}
+                </p>
               </div>
               <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-800 transform rotate-45"></div>
             </div>
@@ -281,7 +326,9 @@ const IdeaCenter = () => {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Bir soru sorun veya fikir isteyin..."
+              placeholder={language === 'tr' 
+                ? "Bir soru sorun veya fikir isteyin..." 
+                : "Ask a question or request ideas..."}
               className="w-full p-3 pr-12 rounded-xl border border-gray-200 dark:border-[#2a3241] bg-white dark:bg-[#1a1f2e] text-[#1d1d1f] dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1d1d1f] dark:focus:ring-[#0071e3]"
               disabled={isLoading}
             />
@@ -296,7 +343,9 @@ const IdeaCenter = () => {
               </svg>
               <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50">
                 <div className="bg-gray-800 text-white text-xs py-2 px-3 rounded-lg shadow-lg whitespace-nowrap">
-                  <p>Örnek etkinlik soruları için tıklayın</p>
+                  <p>{language === 'tr' 
+                    ? "Örnek etkinlik soruları için tıklayın" 
+                    : "Click for example activity questions"}</p>
                 </div>
                 <div className="absolute -bottom-1 right-4 w-2 h-2 bg-gray-800 transform rotate-45"></div>
               </div>
@@ -307,7 +356,7 @@ const IdeaCenter = () => {
             disabled={isLoading}
             className="px-6 py-3 rounded-xl bg-[#1d1d1f] dark:bg-[#0071e3] text-white font-medium hover:bg-black dark:hover:bg-[#0077ed] disabled:bg-gray-300 dark:disabled:bg-[#0071e3]/50 transition-colors duration-200 disabled:cursor-not-allowed"
           >
-            Gönder
+            {language === 'tr' ? "Gönder" : "Send"}
           </button>
         </form>
       </div>

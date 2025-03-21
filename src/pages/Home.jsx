@@ -4,7 +4,7 @@ import { FaWhatsapp, FaLiraSign, FaCheck } from 'react-icons/fa';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { tr, enUS } from 'date-fns/locale';
 import Masonry from 'react-masonry-css';
 import { 
   ArrowPathIcon,
@@ -12,7 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 const Home = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [tomorrowEvents, setTomorrowEvents] = useState([]);
   const [pendingPayments, setPendingPayments] = useState([]);
   const [expiringSoonPackages, setExpiringSoonPackages] = useState([]);
@@ -208,6 +208,11 @@ const Home = () => {
     fetchExpiringSoonPackages();
   }, []);
 
+  // Format date based on selected language
+  const formatDate = (date, formatStr) => {
+    return format(date, formatStr, { locale: language === 'tr' ? tr : enUS });
+  };
+
   // Etkinlik türüne göre renkler
   const eventTypeColors = {
     'ingilizce': 'bg-[#0071e3]/10 text-[#0071e3] ring-1 ring-[#0071e3]/20',
@@ -215,11 +220,11 @@ const Home = () => {
     'ozel': 'bg-[#ff9500]/10 text-[#ff9500] ring-1 ring-[#ff9500]/20'
   };
 
-  // Etkinlik türü Türkçe karşılıkları
+  // Event type labels with translations
   const eventTypeLabels = {
-    'ingilizce': 'İngilizce',
-    'duyusal': 'Duyusal',
-    'ozel': 'Özel Etkinlik'
+    'ingilizce': language === 'en' ? 'English' : 'İngilizce',
+    'duyusal': language === 'en' ? 'Sensory' : 'Duyusal',
+    'ozel': language === 'en' ? 'Special Event' : 'Özel Etkinlik'
   };
 
   // Etkinlik türüne göre ikonlar
@@ -230,10 +235,9 @@ const Home = () => {
   };
 
   // Yarın için tarih formatını hazırla
-  const tomorrowDateString = format(
+  const tomorrowDateString = formatDate(
     new Date(new Date().setDate(new Date().getDate() + 1)),
-    'd MMMM EEEE',
-    { locale: tr }
+    'd MMMM EEEE'
   );
 
   // Masonry breakpoints
@@ -250,11 +254,16 @@ const Home = () => {
       {/* Header */}
       <div className="flex items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0">
           <div>
-            <h1 className="text-xl font-medium text-[#1d1d1f] dark:text-white">Anasayfa</h1>
+            <h1 className="text-xl font-medium text-[#1d1d1f] dark:text-white">
+              {language === 'en' ? 'Home' : 'Anasayfa'}
+            </h1>
           </div>
           <div className="flex items-center">
             <div className="text-sm text-[#6e6e73] dark:text-[#86868b]">
-              Bugün: <span className="font-semibold text-[#1d1d1f] dark:text-white">{format(new Date(), 'd MMMM yyyy', { locale: tr })}</span>
+              {language === 'en' ? 'Today: ' : 'Bugün: '} 
+              <span className="font-semibold text-[#1d1d1f] dark:text-white">
+                {formatDate(new Date(), 'd MMMM yyyy')}
+              </span>
             </div>
           </div>
       </div>
@@ -269,7 +278,7 @@ const Home = () => {
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center">
               <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-white">
-                Yarınki Dersler
+                {language === 'en' ? 'Tomorrow\'s Lessons' : 'Yarınki Dersler'}
               </h2>
               <span className="text-sm text-[#6e6e73] dark:text-[#86868b] capitalize sm:ml-2">
                 ({tomorrowDateString})
@@ -281,7 +290,7 @@ const Home = () => {
             className="flex items-center gap-1.5 text-[#0071e3] hover:text-[#0077ED] text-sm font-medium"
           >
             <ArrowPathIcon className="h-4 w-4" />
-            <span>Yenile</span>
+            <span>{language === 'en' ? 'Refresh' : 'Yenile'}</span>
           </button>
         </div>
 
@@ -333,10 +342,12 @@ const Home = () => {
           <div className="text-center py-12 bg-white dark:bg-[#121621] rounded-xl border border-[#d2d2d7] dark:border-[#2a3241]">
             <CalendarDaysIcon className="w-12 h-12 mx-auto text-[#86868b] mb-4" />
             <h3 className="text-lg font-medium text-[#1d1d1f] dark:text-white mb-1">
-              Yarın için ders bulunmuyor
+              {language === 'en' ? 'No lessons for tomorrow' : 'Yarın için ders bulunmuyor'}
             </h3>
             <p className="text-sm text-[#6e6e73] dark:text-[#86868b] max-w-md mx-auto">
-              Yarın için planlanmış herhangi bir ders bulunmuyor. Takvim sayfasından yeni ders ekleyebilirsiniz.
+              {language === 'en' 
+                ? 'There are no lessons scheduled for tomorrow. You can add new lessons from the Calendar page.' 
+                : 'Yarın için planlanmış herhangi bir ders bulunmuyor. Takvim sayfasından yeni ders ekleyebilirsiniz.'}
             </p>
           </div>
         ) : (
@@ -356,12 +367,12 @@ const Home = () => {
                   <div className="flex items-start justify-between pb-4 border-b border-[#d2d2d7] dark:border-[#2a3241]">
                     <div>
                       <h3 className="text-[15px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-2">
-                        {format(new Date(event.event_date), 'HH:mm', { locale: tr })}
+                        {formatDate(new Date(event.event_date), 'HH:mm')}
                         <span className="text-[#6e6e73] dark:text-[#86868b]">|</span>
                         {event.age_group}
                       </h3>
                       <p className="text-[13px] text-[#6e6e73] dark:text-[#86868b] mt-0.5">
-                        Kapasite: {event.current_capacity}/5
+                        {language === 'en' ? 'Capacity: ' : 'Kapasite: '}{event.current_capacity}/5
                       </p>
                     </div>
                     <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium ${eventTypeColors[event.event_type]}`}>
@@ -383,12 +394,12 @@ const Home = () => {
                   <div className="mt-4">
                     <h4 className="text-[13px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-1.5 mb-3">
                       <FiUsers className="w-4 h-4 text-[#0071e3]" />
-                      Katılımcılar ({event.participants.length})
+                      {language === 'en' ? 'Participants' : 'Katılımcılar'} ({event.participants.length})
                     </h4>
 
                     {event.participants.length === 0 ? (
                       <p className="text-[13px] text-[#6e6e73] dark:text-[#86868b] italic">
-                        Henüz katılımcı yok
+                        {language === 'en' ? 'No participants yet' : 'Henüz katılımcı yok'}
                       </p>
                     ) : (
                       <div className="space-y-3">
@@ -411,7 +422,7 @@ const Home = () => {
                                       </span>
                                     </p>
                                     <p className="text-[11px] text-[#6e6e73] dark:text-[#86868b]">
-                                      Veli: {participant.registrations.parent_name}
+                                      {language === 'en' ? 'Parent: ' : 'Veli: '}{participant.registrations.parent_name}
                                     </p>
                                   </div>
                                 </div>
@@ -422,7 +433,7 @@ const Home = () => {
                                   <button 
                                     onClick={(e) => toggleMessageSent(participant.id, e)}
                                     className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0071e3]/10 text-[#0071e3] dark:bg-[#0071e3]/20 dark:text-[#0071e3] border border-[#0071e3]/30 hover:bg-[#0071e3]/20 dark:hover:bg-[#0071e3]/30 transition-colors cursor-pointer"
-                                    title="Mesaj Gönderildi - Kaldırmak için tıklayın"
+                                    title={language === 'en' ? 'Message Sent - Click to Remove' : 'Mesaj Gönderildi - Kaldırmak için tıklayın'}
                                   >
                                     <FaCheck className="w-3 h-3" />
                                   </button>
@@ -430,23 +441,23 @@ const Home = () => {
                                 
                                 <a 
                                   href={`https://wa.me/90${participant.registrations.parent_phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(`Merhaba ${participant.registrations.parent_name} Hanım 😊
-                                          Çocuğunuzun etkinliğimizde bize katılacak olmasından büyük mutluluk duyuyoruz! İşte rezervasyonunuzla ilgili detaylar:
-                                          * Etkinlik Tarihi: ${format(new Date(event.event_date), 'd MMMM yyyy', { locale: tr })} (Yarın)
-                                          * Saat: ${format(new Date(event.event_date), 'HH:mm', { locale: tr })} 
-                                          * Etkinlik: ${eventTypeLabels[event.event_type]} 
-                                          * Yer: Ritim İstanbul B blok Kat:1 Ofis 237
-                                          * Süre: 45-60 dk
-                                          Etkinlik sırasında çocuklarınızı güvende tutmak için gerekli tüm önlemleri aldık. Lütfen çocuğunuzun rahat kıyafetlerle gelmesini sağlayın ve yanlarına bir su şişesi ve küçük bir atıştırmalık getirmeyi unutmayın. Yedek kıyafet yada aktivite önlüğü getirmenizi tavsiye ederiz.
-                                          Rezervasyonunuzun iptali için lütfen bir gün önceden bizi bilgilendiriniz. Rezervasyonunuza saatinde gelmenizi rica ederiz. 
-                                          Eğer herhangi bir sorunuz varsa, lütfen bize ulaşmaktan çekinmeyin.
-                                          Sizleri ve çocuğunuzu atölyemizde görmek için sabırsızlanıyoruz!
-                                          Sevgilerle,
-                                          HelloKido Oyun Atölyesi 🌸`)}`}
+Çocuğunuzun etkinliğimizde bize katılacak olmasından büyük mutluluk duyuyoruz! İşte rezervasyonunuzla ilgili detaylar:
+* Etkinlik Tarihi: ${format(new Date(event.event_date), 'd MMMM yyyy', { locale: tr })} (Yarın)
+* Saat: ${format(new Date(event.event_date), 'HH:mm', { locale: tr })} 
+* Etkinlik: ${eventTypeLabels[event.event_type]} 
+* Yer: Ritim İstanbul B blok Kat:1 Ofis 237
+* Süre: 45-60 dk
+Etkinlik sırasında çocuklarınızı güvende tutmak için gerekli tüm önlemleri aldık. Lütfen çocuğunuzun rahat kıyafetlerle gelmesini sağlayın ve yanlarına bir su şişesi ve küçük bir atıştırmalık getirmeyi unutmayın. Yedek kıyafet yada aktivite önlüğü getirmenizi tavsiye ederiz.
+Rezervasyonunuzun iptali için lütfen bir gün önceden bizi bilgilendiriniz. Rezervasyonunuza saatinde gelmenizi rica ederiz. 
+Eğer herhangi bir sorunuz varsa, lütfen bize ulaşmaktan çekinmeyin.
+Sizleri ve çocuğunuzu atölyemizde görmek için sabırsızlanıyoruz!
+Sevgilerle,
+HelloKido Oyun Atölyesi 🌸`)}`}
                                   onClick={() => addMessageSent(participant.id)}
                                   target="_blank" 
                                   rel="noopener noreferrer"
                                   className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors"
-                                  title="WhatsApp'tan Hatırlatma Mesajı Gönder"
+                                  title={language === 'en' ? 'Send Reminder via WhatsApp' : 'WhatsApp\'tan Hatırlatma Mesajı Gönder'}
                                 >
                                   <FaWhatsapp className="w-4 h-4" />
                                 </a>
@@ -473,7 +484,7 @@ const Home = () => {
                   <FaLiraSign className="h-4 w-4 text-[#0071e3]" />
                 </div>
                 <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-white">
-                  Bekleyen Ödemeler
+                  {language === 'en' ? 'Pending Payments' : 'Bekleyen Ödemeler'}
                 </h2>
               </div>
               <button 
@@ -481,7 +492,7 @@ const Home = () => {
                 className="flex items-center gap-1.5 text-[#0071e3] hover:text-[#0077ED] text-sm font-medium"
               >
                 <ArrowPathIcon className="h-4 w-4" />
-                <span>Yenile</span>
+                <span>{language === 'en' ? 'Refresh' : 'Yenile'}</span>
               </button>
             </div>
 
@@ -522,10 +533,10 @@ const Home = () => {
               <div className="text-center py-12 bg-white dark:bg-[#121621] rounded-xl border border-[#d2d2d7] dark:border-[#2a3241]">
                 <FaLiraSign className="w-12 h-12 mx-auto text-[#86868b] mb-4" />
                 <h3 className="text-lg font-medium text-[#1d1d1f] dark:text-white mb-1">
-                  Bekleyen ödeme bulunmuyor
+                  {language === 'en' ? 'No pending payments' : 'Bekleyen ödeme bulunmuyor'}
                 </h3>
                 <p className="text-sm text-[#6e6e73] dark:text-[#86868b] max-w-md mx-auto">
-                  Tüm kayıtların ödemeleri tamamlanmış görünüyor.
+                  {language === 'en' ? 'All registration payments seem to be completed.' : 'Tüm kayıtların ödemeleri tamamlanmış görünüyor.'}
                 </p>
               </div>
             ) : (
@@ -533,7 +544,7 @@ const Home = () => {
               <div className="bg-white dark:bg-[#121621] rounded-xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden">
                 <div className="p-4 sm:px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] bg-[#f5f5f7] dark:bg-[#1c1c1e]/40">
                   <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white">
-                    Toplam {pendingPayments.length} bekleyen ödeme
+                    {language === 'en' ? `Total ${pendingPayments.length} pending payments` : `Toplam ${pendingPayments.length} bekleyen ödeme`}
                   </h3>
                 </div>
                 
@@ -554,7 +565,7 @@ const Home = () => {
                           </span>
                         </p>
                         <p className="text-[13px] text-[#6e6e73] dark:text-[#86868b]">
-                          Veli: {registration.parent_name}
+                          {language === 'en' ? 'Parent: ' : 'Veli: '}{registration.parent_name}
                         </p>
                       </div>
                     </div>
@@ -564,7 +575,7 @@ const Home = () => {
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors"
-                        title="WhatsApp'tan Ödeme Hatırlatma Mesajı Gönder"
+                        title={language === 'en' ? 'Send Payment Reminder via WhatsApp' : 'WhatsApp\'tan Ödeme Hatırlatma Mesajı Gönder'}
                       >
                         <FaWhatsapp className="w-4 h-4" />
                       </a>
@@ -583,7 +594,7 @@ const Home = () => {
                   <FiPackage className="h-4 w-4 text-[#ac39ff]" />
                 </div>
                 <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-white">
-                  Paket Süresi Bitmeye Yaklaşanlar
+                  {language === 'en' ? 'Packages Expiring Soon' : 'Paket Süresi Bitmeye Yaklaşanlar'}
         </h2>
               </div>
               <button 
@@ -591,7 +602,7 @@ const Home = () => {
                 className="flex items-center gap-1.5 text-[#ac39ff] hover:text-[#b54aff] text-sm font-medium"
               >
                 <ArrowPathIcon className="h-4 w-4" />
-                <span>Yenile</span>
+                <span>{language === 'en' ? 'Refresh' : 'Yenile'}</span>
               </button>
             </div>
 
@@ -632,10 +643,10 @@ const Home = () => {
               <div className="text-center py-12 bg-white dark:bg-[#121621] rounded-xl border border-[#d2d2d7] dark:border-[#2a3241]">
                 <FiPackage className="w-12 h-12 mx-auto text-[#86868b] mb-4" />
                 <h3 className="text-lg font-medium text-[#1d1d1f] dark:text-white mb-1">
-                  Önümüzdeki 7 gün içinde bitecek paket bulunmuyor
+                  {language === 'en' ? 'No packages expiring in the next 7 days' : 'Önümüzdeki 7 gün içinde bitecek paket bulunmuyor'}
                 </h3>
                 <p className="text-sm text-[#6e6e73] dark:text-[#86868b] max-w-md mx-auto">
-                  Önümüzdeki 7 gün içinde bitecek paket bulunmuyor.
+                  {language === 'en' ? 'There are no packages expiring in the next 7 days.' : 'Önümüzdeki 7 gün içinde bitecek paket bulunmuyor.'}
                 </p>
               </div>
             ) : (
@@ -643,7 +654,9 @@ const Home = () => {
               <div className="bg-white dark:bg-[#121621] rounded-xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden">
                 <div className="p-4 sm:px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] bg-[#f5f5f7] dark:bg-[#1c1c1e]/40">
                   <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white">
-                    Toplam {expiringSoonPackages.length} yaklaşan paket bitişi
+                    {language === 'en' 
+                      ? `Total ${expiringSoonPackages.length} upcoming package expiration${expiringSoonPackages.length !== 1 ? 's' : ''}` 
+                      : `Toplam ${expiringSoonPackages.length} yaklaşan paket bitişi`}
                   </h3>
                 </div>
                 
@@ -680,10 +693,10 @@ const Home = () => {
                           </p>
                           <div className="flex items-center gap-2">
                             <p className={`text-[13px] ${urgencyColor} font-medium`}>
-                              {diffDays} gün kaldı
+                              {language === 'en' ? `${diffDays} day${diffDays !== 1 ? 's' : ''} left` : `${diffDays} gün kaldı`}
                             </p>
                             <span className="text-[11px] text-[#6e6e73] dark:text-[#86868b]">
-                              ({format(endDate, 'd MMMM yyyy', { locale: tr })})
+                              ({formatDate(endDate, 'd MMMM yyyy')})
                             </span>
                           </div>
                         </div>
@@ -694,7 +707,7 @@ const Home = () => {
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors"
-                          title="WhatsApp'tan Paket Bitiş Bilgisi Gönder"
+                          title={language === 'en' ? 'Send Package Expiration Info via WhatsApp' : 'WhatsApp\'tan Paket Bitiş Bilgisi Gönder'}
                         >
                           <FaWhatsapp className="w-4 h-4" />
                         </a>

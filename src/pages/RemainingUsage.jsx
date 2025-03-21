@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { tr, enUS } from 'date-fns/locale';
 import { MagnifyingGlassIcon, AdjustmentsHorizontalIcon, XMarkIcon, ChevronLeftIcon } from '@heroicons/react/24/outline';
 
 const RemainingUsage = () => {
+  const { language } = useLanguage();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -173,13 +175,44 @@ const RemainingUsage = () => {
     return matchesSearch && matchesPackage;
   });
 
+  // Format date with the correct locale
+  const formatDate = (date, formatStr) => {
+    return format(new Date(date), formatStr || 'dd.MM.yyyy', { locale: language === 'tr' ? tr : enUS });
+  };
+
+  // Translate package type
+  const translatePackageType = (type) => {
+    if (language === 'tr') {
+      return type === 'hafta-1' ? 'Haftada 1'
+        : type === 'hafta-2' ? 'Haftada 2'
+        : type === 'hafta-3' ? 'Haftada 3'
+        : type === 'hafta-4' ? 'Haftada 4'
+        : 'Tek Seferlik';
+    } else {
+      return type === 'hafta-1' ? '1 Day/Week'
+        : type === 'hafta-2' ? '2 Days/Week'
+        : type === 'hafta-3' ? '3 Days/Week'
+        : type === 'hafta-4' ? '4 Days/Week'
+        : 'One Time';
+    }
+  };
+
+  // Translate payment status
+  const translatePaymentStatus = (status) => {
+    if (language === 'tr') {
+      return status === 'odendi' ? 'Ödendi' : 'Beklemede';
+    } else {
+      return status === 'odendi' ? 'Paid' : 'Pending';
+    }
+  };
+
   return (
     <div className={`flex flex-col ${showDetailView ? 'lg:mr-96' : ''} transition-all duration-300`}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-medium text-[#1d1d1f] dark:text-white">
-            Kalan Kullanım
+            {language === 'tr' ? 'Kalan Kullanım' : 'Remaining Usage'}
             <span className="ml-2 text-sm font-normal text-[#6e6e73] dark:text-[#86868b]">
               ({filteredStudents.length})
             </span>
@@ -191,7 +224,7 @@ const RemainingUsage = () => {
             <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#86868b]" />
             <input
               type="text"
-              placeholder="Öğrenci veya veli ismi ara"
+              placeholder={language === 'tr' ? "Öğrenci veya veli ismi ara" : "Search student or parent name"}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full h-10 sm:h-8 pl-9 pr-4 rounded-lg text-sm border border-[#d2d2d7] dark:border-[#2a3241] bg-white/80 dark:bg-[#121621] text-[#1d1d1f] dark:text-white placeholder-[#86868b] focus:ring-0 focus:border-[#0071e3] dark:focus:border-[#0071e3] transition-colors"
@@ -222,41 +255,41 @@ const RemainingUsage = () => {
                   <th className="py-4 px-6 text-left bg-[#f5f5f7]/50 dark:bg-[#161922]">
                     <div className="flex flex-col">
                       <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                        Öğrenci
+                        {language === 'tr' ? 'Öğrenci' : 'Student'}
                       </span>
                       <span className="text-[10px] font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b] opacity-75">
-                        Veli
+                        {language === 'tr' ? 'Veli' : 'Parent'}
                       </span>
                     </div>
                   </th>
                   <th className="py-4 px-6 text-left bg-[#f5f5f7]/50 dark:bg-[#161922]">
                     <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                      Paket Türü
+                      {language === 'tr' ? 'Paket Türü' : 'Package Type'}
                     </span>
                   </th>
                   <th className="py-4 px-6 text-left bg-[#f5f5f7]/50 dark:bg-[#161922]">
                     <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                      Kayıt Tarihi
+                      {language === 'tr' ? 'Kayıt Tarihi' : 'Start Date'}
                     </span>
                   </th>
                   <th className="py-4 px-6 text-left bg-[#f5f5f7]/50 dark:bg-[#161922]">
                     <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                      Bitiş Tarihi
+                      {language === 'tr' ? 'Bitiş Tarihi' : 'End Date'}
                     </span>
                   </th>
                   <th className="py-4 px-6 text-center bg-[#f5f5f7]/50 dark:bg-[#161922]">
                     <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                      Kalan Ders
+                      {language === 'tr' ? 'Kalan Ders' : 'Remaining'}
                     </span>
                   </th>
                   <th className="py-4 px-6 text-center bg-[#f5f5f7]/50 dark:bg-[#161922]">
                     <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                      Ödeme Durumu
+                      {language === 'tr' ? 'Ödeme Durumu' : 'Payment Status'}
                     </span>
                   </th>
                   <th className="py-4 px-6 text-right bg-[#f5f5f7]/50 dark:bg-[#161922] w-[100px]">
                     <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                      İşlemler
+                      {language === 'tr' ? 'İşlemler' : 'Actions'}
                     </span>
                   </th>
                 </tr>
@@ -322,10 +355,12 @@ const RemainingUsage = () => {
                           <MagnifyingGlassIcon className="w-8 h-8 text-[#6e6e73] dark:text-[#86868b]" />
                         </div>
                         <p className="text-[#1d1d1f] dark:text-white font-medium mb-1">
-                          Kayıt Bulunamadı
+                          {language === 'tr' ? 'Kayıt Bulunamadı' : 'No Records Found'}
                         </p>
                         <p className="text-sm text-[#6e6e73] dark:text-[#86868b]">
-                          {searchTerm ? 'Arama kriterlerinize uygun kayıt bulunamadı.' : 'Henüz kayıt eklenmemiş.'}
+                          {searchTerm 
+                            ? (language === 'tr' ? 'Arama kriterlerinize uygun kayıt bulunamadı.' : 'No records match your search criteria.') 
+                            : (language === 'tr' ? 'Henüz kayıt eklenmemiş.' : 'No records have been added yet.')}
                         </p>
                       </div>
                     </td>
@@ -348,21 +383,17 @@ const RemainingUsage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-[#0071e3]/5 to-[#34d399]/5 dark:from-[#0071e3]/10 dark:to-[#34d399]/10 text-[#0071e3] group-hover:from-[#0071e3]/10 group-hover:to-[#34d399]/10 dark:group-hover:from-[#0071e3]/20 dark:group-hover:to-[#34d399]/20 transition-all">
-                          {student.package_type === 'hafta-1' ? 'Haftada 1'
-                            : student.package_type === 'hafta-2' ? 'Haftada 2'
-                            : student.package_type === 'hafta-3' ? 'Haftada 3'
-                            : student.package_type === 'hafta-4' ? 'Haftada 4'
-                            : 'Tek Seferlik'}
+                          {translatePackageType(student.package_type)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-[#424245] dark:text-[#86868b]">
-                          {format(new Date(student.package_start_date), 'dd.MM.yyyy', { locale: tr })}
+                          {formatDate(student.package_start_date)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-[#424245] dark:text-[#86868b]">
-                          {format(new Date(student.package_end_date), 'dd.MM.yyyy', { locale: tr })}
+                          {formatDate(student.package_end_date)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -382,7 +413,7 @@ const RemainingUsage = () => {
                             ? 'bg-emerald-400/10 text-emerald-700 ring-emerald-500/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20'
                             : 'bg-amber-400/10 text-amber-700 ring-amber-500/20 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20'
                         }`}>
-                          {student.payment_status === 'odendi' ? 'Ödendi' : 'Beklemede'}
+                          {translatePaymentStatus(student.payment_status)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -390,7 +421,7 @@ const RemainingUsage = () => {
                           onClick={() => handleDetailClick(student)}
                           className="inline-flex items-center justify-center h-8 px-4 text-xs font-medium rounded-lg bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white border border-[#d2d2d7] dark:border-[#2a3241] hover:bg-[#1d1d1f] dark:hover:bg-[#0071e3] hover:text-white dark:hover:text-white hover:border-[#1d1d1f] dark:hover:border-[#0071e3] focus:outline-none transition-all duration-200"
                         >
-                          Detay
+                          {language === 'tr' ? 'Detay' : 'Details'}
                         </button>
                       </td>
                     </tr>
@@ -411,7 +442,7 @@ const RemainingUsage = () => {
           {/* Sheet Header */}
           <div className="flex items-center justify-between px-6 h-16 border-b border-[#d2d2d7] dark:border-[#2a3241] shrink-0">
             <h2 className="text-lg font-medium text-[#1d1d1f] dark:text-white">
-              Filtreler
+              {language === 'tr' ? 'Filtreler' : 'Filters'}
             </h2>
             <button
               onClick={() => setIsFilterSheetOpen(false)}
@@ -426,7 +457,7 @@ const RemainingUsage = () => {
             {/* Paket Türü */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white">
-                Paket Türü
+                {language === 'tr' ? 'Paket Türü' : 'Package Type'}
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -439,7 +470,7 @@ const RemainingUsage = () => {
                     }
                   `}
                 >
-                  Haftada 1
+                  {language === 'tr' ? 'Haftada 1' : '1 Day/Week'}
                 </button>
                 <button
                   onClick={() => setPackageFilter('hafta-2')}
@@ -451,7 +482,7 @@ const RemainingUsage = () => {
                     }
                   `}
                 >
-                  Haftada 2
+                  {language === 'tr' ? 'Haftada 2' : '2 Days/Week'}
                 </button>
                 <button
                   onClick={() => setPackageFilter('hafta-3')}
@@ -463,7 +494,7 @@ const RemainingUsage = () => {
                     }
                   `}
                 >
-                  Haftada 3
+                  {language === 'tr' ? 'Haftada 3' : '3 Days/Week'}
                 </button>
                 <button
                   onClick={() => setPackageFilter('hafta-4')}
@@ -475,7 +506,7 @@ const RemainingUsage = () => {
                     }
                   `}
                 >
-                  Haftada 4
+                  {language === 'tr' ? 'Haftada 4' : '4 Days/Week'}
                 </button>
                 <button
                   onClick={() => setPackageFilter('tek-seferlik')}
@@ -487,7 +518,7 @@ const RemainingUsage = () => {
                     }
                   `}
                 >
-                  Tek Seferlik
+                  {language === 'tr' ? 'Tek Seferlik' : 'One Time'}
                 </button>
               </div>
             </div>
@@ -503,13 +534,13 @@ const RemainingUsage = () => {
                 }}
                 className="flex-1 h-10 bg-gray-100 dark:bg-[#1d1d1f] text-[#1d1d1f] dark:text-white font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-[#2a3241] focus:outline-none"
               >
-                Filtreleri Temizle
+                {language === 'tr' ? 'Filtreleri Temizle' : 'Clear Filters'}
               </button>
               <button
                 onClick={() => setIsFilterSheetOpen(false)}
                 className="flex-1 h-10 bg-[#1d1d1f] dark:bg-[#0071e3] text-white font-medium rounded-xl hover:bg-black dark:hover:bg-[#0077ed] focus:outline-none "
               >
-                Uygula
+                {language === 'tr' ? 'Uygula' : 'Apply'}
               </button>
             </div>
           </div>
@@ -540,7 +571,7 @@ const RemainingUsage = () => {
               <ChevronLeftIcon className="w-5 h-5 text-[#424245] dark:text-[#86868b]" />
             </button>
             <h2 className="text-lg font-medium text-[#1d1d1f] dark:text-white">
-              Öğrenci Detayı
+              {language === 'tr' ? 'Öğrenci Detayı' : 'Student Details'}
             </h2>
             <button
               onClick={handleCloseDetail}
@@ -557,12 +588,12 @@ const RemainingUsage = () => {
                 {/* Temel Bilgiler */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white uppercase tracking-wider">
-                    Temel Bilgiler
+                    {language === 'tr' ? 'Temel Bilgiler' : 'Basic Information'}
                   </h3>
                   <div className="grid grid-cols-1 gap-4 bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                     <div>
                       <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Öğrenci Adı
+                        {language === 'tr' ? 'Öğrenci Adı' : 'Student Name'}
                       </label>
                       <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
                         {selectedStudent.student_name}
@@ -570,7 +601,7 @@ const RemainingUsage = () => {
                     </div>
                     <div>
                       <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Veli Adı
+                        {language === 'tr' ? 'Veli Adı' : 'Parent Name'}
                       </label>
                       <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
                         {selectedStudent.parent_name}
@@ -582,35 +613,31 @@ const RemainingUsage = () => {
                 {/* Paket Bilgileri */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white uppercase tracking-wider">
-                    Paket Bilgileri
+                    {language === 'tr' ? 'Paket Bilgileri' : 'Package Information'}
                   </h3>
                   <div className="grid grid-cols-1 gap-4 bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                     <div>
                       <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Paket Türü
+                        {language === 'tr' ? 'Paket Türü' : 'Package Type'}
                       </label>
                       <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r from-[#0071e3]/5 to-[#34d399]/5 dark:from-[#0071e3]/10 dark:to-[#34d399]/10 text-[#0071e3]">
-                        {selectedStudent.package_type === 'hafta-1' ? 'Haftada 1'
-                          : selectedStudent.package_type === 'hafta-2' ? 'Haftada 2'
-                          : selectedStudent.package_type === 'hafta-3' ? 'Haftada 3'
-                          : selectedStudent.package_type === 'hafta-4' ? 'Haftada 4'
-                          : 'Tek Seferlik'}
+                        {translatePackageType(selectedStudent.package_type)}
                       </span>
                     </div>
                     <div>
                       <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Başlangıç Tarihi
+                        {language === 'tr' ? 'Başlangıç Tarihi' : 'Start Date'}
                       </label>
                       <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
-                        {format(new Date(selectedStudent.package_start_date), 'dd MMMM yyyy', { locale: tr })}
+                        {formatDate(selectedStudent.package_start_date)}
                       </span>
                     </div>
                     <div>
                       <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Bitiş Tarihi
+                        {language === 'tr' ? 'Bitiş Tarihi' : 'End Date'}
                       </label>
                       <span className="block text-sm font-medium text-[#1d1d1f] dark:text-white">
-                        {format(new Date(selectedStudent.package_end_date), 'dd MMMM yyyy', { locale: tr })}
+                        {formatDate(selectedStudent.package_end_date)}
                       </span>
                     </div>
                   </div>
@@ -620,7 +647,7 @@ const RemainingUsage = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white uppercase tracking-wider">
-                      Dersler
+                      {language === 'tr' ? 'Dersler' : 'Lessons'}
                     </h3>
                   </div>
                   
@@ -648,10 +675,10 @@ const RemainingUsage = () => {
                   ) : studentLessons.length === 0 ? (
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-6 rounded-xl text-center">
                       <p className="text-[#1d1d1f] dark:text-white font-medium">
-                        Henüz ders kaydı yok
+                        {language === 'tr' ? 'Henüz ders kaydı yok' : 'No lessons recorded yet'}
                       </p>
                       <p className="text-sm text-[#6e6e73] dark:text-[#86868b] mt-1">
-                        Bu öğrenci için ders planlaması yapılmamış.
+                        {language === 'tr' ? 'Bu öğrenci için ders planlaması yapılmamış.' : 'No lessons scheduled for this student'}
                       </p>
                     </div>
                   ) : (
@@ -669,7 +696,7 @@ const RemainingUsage = () => {
                                   {lesson.is_makeup && ' (Telafi)'}
                                 </span>
                                 <span className="text-xs text-[#6e6e73] dark:text-[#86868b] mt-1">
-                                  {lesson.events && format(new Date(lesson.events.event_date), 'dd MMMM yyyy, HH:mm', { locale: tr })}
+                                  {lesson.events && formatDate(lesson.events.event_date, 'dd MMMM yyyy, HH:mm')}
                                 </span>
                                 
                                 {/* Ek notlar */}
@@ -726,7 +753,7 @@ const RemainingUsage = () => {
                                   : 'bg-emerald-400/5 text-emerald-700/30 ring-1 ring-emerald-500/10 dark:bg-emerald-400/5 dark:text-emerald-300/30 dark:ring-emerald-400/10 hover:bg-emerald-400/20 dark:hover:bg-emerald-400/20 hover:text-emerald-700 dark:hover:text-emerald-300'
                               } transition-colors`}
                             >
-                              Katıldı
+                              {language === 'tr' ? 'Katıldı' : 'Attended'}
                             </button>
                             <button
                               onClick={() => updateLessonStatus(lesson.id, 'no_show')}
@@ -737,7 +764,7 @@ const RemainingUsage = () => {
                                   : 'bg-red-400/5 text-red-700/30 ring-1 ring-red-500/10 dark:bg-red-400/5 dark:text-red-300/30 dark:ring-red-400/10 hover:bg-red-400/20 dark:hover:bg-red-400/20 hover:text-red-700 dark:hover:text-red-300'
                               } transition-colors`}
                             >
-                              Gelmedi
+                              {language === 'tr' ? 'Gelmedi' : 'No Show'}
                             </button>
                             <button
                               onClick={() => updateLessonStatus(lesson.id, 'postponed')}
@@ -748,7 +775,7 @@ const RemainingUsage = () => {
                                   : 'bg-amber-400/5 text-amber-700/30 ring-1 ring-amber-500/10 dark:bg-amber-400/5 dark:text-amber-300/30 dark:ring-amber-400/10 hover:bg-amber-400/20 dark:hover:bg-amber-400/20 hover:text-amber-700 dark:hover:text-amber-300'
                               } transition-colors`}
                             >
-                              Ertele
+                              {language === 'tr' ? 'Ertelendi' : 'Postponed'}
                             </button>
                             <button
                               onClick={() => updateLessonStatus(lesson.id, 'makeup')}
@@ -759,7 +786,7 @@ const RemainingUsage = () => {
                                   : 'bg-blue-400/5 text-blue-700/30 ring-1 ring-blue-500/10 dark:bg-blue-400/5 dark:text-blue-300/30 dark:ring-blue-400/10 hover:bg-blue-400/20 dark:hover:bg-blue-400/20 hover:text-blue-700 dark:hover:text-blue-300'
                               } transition-colors`}
                             >
-                              Telafi
+                              {language === 'tr' ? 'Telafi' : 'Makeup'}
                             </button>
                           </div>
                         </div>
@@ -771,13 +798,13 @@ const RemainingUsage = () => {
                 {/* Kullanım Durumu */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white uppercase tracking-wider">
-                    Kullanım Durumu
+                    {language === 'tr' ? 'Kullanım Durumu' : 'Usage Status'}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl flex items-center">
                       <div>
                       <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Kalan Ders
+                        {language === 'tr' ? 'Kalan Ders' : 'Remaining Lessons'}
                       </label>
                       <span className={`text-2xl font-medium ${
                           studentDetails?.remaining_lessons <= 0 
@@ -793,14 +820,14 @@ const RemainingUsage = () => {
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl flex items-center">
                       <div>
                           <label className="block text-xs text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                            Ödeme Durumu
+                            {language === 'tr' ? 'Ödeme Durumu' : 'Payment Status'}
                           </label>
                         <span className={`inline-flex w-auto items-center px-3 py-1.5 rounded-lg text-xs font-medium ${
                           studentDetails?.payment_status === 'odendi'
                               ? 'bg-emerald-400/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20'
                               : 'bg-amber-400/10 text-amber-700 ring-1 ring-amber-500/20 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20'
                           }`}>
-                          {studentDetails?.payment_status === 'odendi' ? 'Ödendi' : 'Beklemede'}
+                          {translatePaymentStatus(studentDetails?.payment_status)}
                           </span>
                       </div>
                     </div>
@@ -810,12 +837,12 @@ const RemainingUsage = () => {
                 {/* İstatistikler */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-white uppercase tracking-wider">
-                    İstatistikler
+                    {language === 'tr' ? 'İstatistikler' : 'Statistics'}
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                       <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Katıldığı Dersler
+                        {language === 'tr' ? 'Katıldığı Dersler' : 'Attended Lessons'}
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
                         {studentDetails?.attended_lessons || 0}
@@ -823,7 +850,7 @@ const RemainingUsage = () => {
                     </div>
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                       <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Gelmeyen
+                        {language === 'tr' ? 'Gelmeyen' : 'No Shows'}
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
                         {studentDetails?.no_show_lessons || 0}
@@ -831,7 +858,7 @@ const RemainingUsage = () => {
                     </div>
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                       <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Telafi Dersleri
+                        {language === 'tr' ? 'Telafi Dersleri' : 'Makeup Lessons'}
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
                         {studentDetails?.makeup_completed || 0}
@@ -839,7 +866,7 @@ const RemainingUsage = () => {
                     </div>
                     <div className="bg-[#f5f5f7] dark:bg-[#161922] p-4 rounded-xl">
                       <label className="block text-[10px] text-[#6e6e73] dark:text-[#86868b] uppercase tracking-wider mb-1">
-                        Ertelenen Dersler
+                        {language === 'tr' ? 'Ertelenen Dersler' : 'Postponed Lessons'}
                       </label>
                       <span className="text-2xl font-medium text-[#1d1d1f] dark:text-white">
                         {studentDetails?.postponed_lessons || 0}

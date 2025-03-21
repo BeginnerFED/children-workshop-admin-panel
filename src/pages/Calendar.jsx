@@ -4,6 +4,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import trLocale from '@fullcalendar/core/locales/tr';
+import enLocale from '@fullcalendar/core/locales/en-gb';
 import { PlusIcon, UserGroupIcon, ClockIcon, AcademicCapIcon, DocumentDuplicateIcon, CalendarDaysIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 import CreateEvent from '../components/CreateEvent';
 import UpdateEventSheet from '../components/UpdateEventSheet';
@@ -13,10 +14,12 @@ import Toast from '../components/ui/Toast';
 import '../styles/calendar.css';
 import { addDays, format, isSameDay, parseISO } from 'date-fns';
 import tr from 'date-fns/locale/tr';
+import enUS from 'date-fns/locale/en-US';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import ActionNotification from '../components/ActionNotification';
+import { useLanguage } from '../context/LanguageContext';
 
-// Ekran genişliğini izleyen özel hook
+// Custom hook to monitor screen width
 const useWindowSize = () => {
   const [windowSize, setWindowSize] = useState({
     width: window.innerWidth,
@@ -24,7 +27,7 @@ const useWindowSize = () => {
   });
 
   useEffect(() => {
-    // Ekran boyutu değiştiğinde state'i güncelle
+    // Update state when screen size changes
     const handleResize = () => {
       setWindowSize({
         width: window.innerWidth,
@@ -32,10 +35,10 @@ const useWindowSize = () => {
       });
     };
 
-    // Event listener ekle
+    // Add event listener
     window.addEventListener('resize', handleResize);
     
-    // Component unmount olduğunda event listener'ı kaldır
+    // Remove event listener when component unmounts
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -43,6 +46,7 @@ const useWindowSize = () => {
 };
 
 const Calendar = () => {
+  const { language } = useLanguage();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUpdateSheetOpen, setIsUpdateSheetOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -61,55 +65,67 @@ const Calendar = () => {
   const [currentWeekRange, setCurrentWeekRange] = useState(null);
   const calendarRef = useRef(null);
   
-  // Copy Week Modal için state değişkenleri
+  // States for Copy Week Modal
   const [isCopyWeekModalOpen, setIsCopyWeekModalOpen] = useState(false);
   const [hasConflictsInTargetWeek, setHasConflictsInTargetWeek] = useState(false);
   const [copyWeekLoading, setCopyWeekLoading] = useState(false);
   const [currentWeekEvents, setCurrentWeekEvents] = useState([]);
   
-  // Action notification state değişkenleri
+  // Action notification state variables
   const [isActionNotificationVisible, setIsActionNotificationVisible] = useState(false);
   const [actionNotificationMessage, setActionNotificationMessage] = useState('');
   const [targetWeekForNavigation, setTargetWeekForNavigation] = useState(null);
   
-  // Ekran genişliğini al
+  // Get screen width
   const { width } = useWindowSize();
   
-  // Yaş grubu metnini düzenleyen yardımcı fonksiyon
+  // Helper function to format age group text
   const formatAgeGroup = (ageGroup) => {
-    // Ekran genişliği 1700px'den küçükse veya zoom yapılmışsa
+    // If screen width is less than 1700px or zoomed
     if (width < 1700) {
-      // "Aylık" veya "Yaş" kelimelerini kaldır
-      return ageGroup
-        .replace('Aylık', '')
-        .replace('Yaş', '')
-        .trim();
+      // Remove "Aylık" or "Yaş" words for Turkish, "Month" or "Year" for English
+      if (language === 'tr') {
+        return ageGroup
+          .replace('Aylık', '')
+          .replace('Yaş', '')
+          .trim();
+      } else {
+        return ageGroup
+          .replace('Month', '')
+          .replace('Year', '')
+          .trim();
+      }
     }
     
-    // Normal görünüm
+    // Normal view
     return ageGroup;
   };
 
-  // Etkinlik türüne göre renk ve ikon belirleme
+  // Format date with the correct locale
+  const formatDate = (date, formatStr) => {
+    return format(new Date(date), formatStr || 'dd.MM.yyyy', { locale: language === 'tr' ? tr : enUS });
+  };
+
+  // Determine color and icon based on event type
   const getEventTypeDetails = (type) => {
     switch (type) {
       case 'ingilizce':
         return {
-          color: '#8b5cf6', // Mor renk (Tailwind violet-500)
+          color: '#8b5cf6', // Violet color (Tailwind violet-500)
           icon: '🇬🇧',
-          label: 'İngilizce'
+          label: language === 'tr' ? 'İngilizce' : 'English'
         };
       case 'duyusal':
         return {
-          color: '#f97316', // Turuncu renk (Tailwind orange-500)
+          color: '#f97316', // Orange color (Tailwind orange-500)
           icon: '🎨',
-          label: 'Duyusal'
+          label: language === 'tr' ? 'Duyusal' : 'Sensory'
         };
       case 'ozel':
         return {
           color: '#059669',
           icon: '⭐',
-          label: 'Özel'
+          label: language === 'tr' ? 'Özel' : 'Special'
         };
       default:
         return {
@@ -120,7 +136,7 @@ const Calendar = () => {
     }
   };
 
-  // Etkinlikleri getir
+  // Fetch events
   const fetchEvents = async () => {
     try {
       const { data: eventsData, error: eventsError } = await supabase
@@ -131,7 +147,7 @@ const Calendar = () => {
 
       if (eventsError) throw eventsError;
 
-      // Kayıtlı öğrencileri getir
+      // Get registered students
       const registrationIds = eventsData
         .flatMap(event => event.event_participants)
         .map(participant => participant.registration_id);
@@ -143,12 +159,12 @@ const Calendar = () => {
 
       if (studentsError) throw studentsError;
 
-      // Öğrenci isimlerini id'ler ile eşleştir
+      // Match student names with IDs
       const studentMap = Object.fromEntries(
         studentsData.map(student => [student.id, student.student_name])
       );
 
-      // Etkinlikleri FullCalendar formatına dönüştür
+      // Convert events to FullCalendar format
       const formattedEvents = eventsData.map(event => {
         const typeDetails = getEventTypeDetails(event.event_type);
         const students = event.event_participants
@@ -170,23 +186,23 @@ const Calendar = () => {
             maxCapacity: event.max_capacity,
             typeDetails,
             students,
-            originalEvent: event // Kopyalama için orijinal olay verilerini sakla
+            originalEvent: event // Store original event data for copying
           }
         };
       });
 
       setEvents(formattedEvents);
       
-      // Aynı gün ve türdeki etkinlikleri grupla
+      // Group events by day and type
       groupEventsByDayAndType(formattedEvents);
     } catch (error) {
-      console.error('Etkinlikler getirilirken hata:', error);
+      console.error(language === 'tr' ? 'Etkinlikler getirilirken hata:' : 'Error fetching events:', error);
     }
   };
 
-  // Aynı gün ve türdeki etkinlikleri grupla
+  // Group events by day and type
   const groupEventsByDayAndType = (events) => {
-    // Etkinlikleri gün ve türe göre grupla
+    // Group events by day and type
     const groupedByDayAndType = {};
     
     events.forEach(event => {
@@ -211,7 +227,7 @@ const Calendar = () => {
       groupedByDayAndType[dateKey][eventType].events.push(event);
     });
     
-    // Grupları FullCalendar formatına dönüştür
+    // Convert groups to FullCalendar format
     const groupedEvents = [];
     
     Object.keys(groupedByDayAndType).forEach(dateKey => {
@@ -220,7 +236,7 @@ const Calendar = () => {
       Object.keys(groupedByDayAndType[dateKey]).forEach(eventType => {
         const group = groupedByDayAndType[dateKey][eventType];
         
-        // Tüm etkinlik türlerini grupla (sayısı 1 olsa bile)
+        // Group all event types (even if count is 1)
         const date = new Date(year, month, day);
         
         groupedEvents.push({
@@ -244,12 +260,12 @@ const Calendar = () => {
     setGroupedEvents(groupedEvents);
   };
 
-  // Component yüklendiğinde ve yeni etkinlik eklendiğinde etkinlikleri getir
+  // Load events when component mounts and when new events are added
   useEffect(() => {
     fetchEvents();
   }, []);
 
-  // Özel etkinlik render fonksiyonu
+  // Render event content
   const renderEventContent = (eventInfo) => {
     const { typeDetails, currentCapacity, maxCapacity, ageGroup, students, description, isGrouped, count } = eventInfo.event.extendedProps;
     
@@ -278,7 +294,7 @@ const Calendar = () => {
             <div className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-md shadow-sm w-fit">
               <ClockIcon className="w-3 h-3 text-white/70" />
               <span className="font-medium">
-                {new Date(eventInfo.event.start).toLocaleTimeString('tr-TR', {
+                {new Date(eventInfo.event.start).toLocaleTimeString(language === 'tr' ? 'tr-TR' : 'en-US', {
                   hour: '2-digit',
                   minute: '2-digit'
                 })}
@@ -379,13 +395,13 @@ const Calendar = () => {
   const handleCreateEvent = async (formData) => {
     try {
       if (!formData || !formData.date) {
-        throw new Error('Geçersiz form verisi');
+        throw new Error(language === 'tr' ? 'Geçersiz form verisi' : 'Invalid form data');
       }
 
       // Tarih ve saat bilgisini birleştir
       const eventDateTime = new Date(formData.date);
       if (isNaN(eventDateTime.getTime())) {
-        throw new Error('Geçersiz tarih formatı');
+        throw new Error(language === 'tr' ? 'Geçersiz tarih formatı' : 'Invalid date format');
       }
 
       eventDateTime.setHours(parseInt(formData.time.hour) || 0);
@@ -412,7 +428,11 @@ const Calendar = () => {
       });
 
       if (conflictingEvent) {
-        throw new Error('Bu tarih ve saatte başka bir etkinlik zaten mevcut. Lütfen farklı bir saat seçin.');
+        throw new Error(
+          language === 'tr' 
+            ? 'Bu tarih ve saatte başka bir etkinlik zaten mevcut. Lütfen farklı bir saat seçin.' 
+            : 'There is already another event at this date and time. Please select a different time.'
+        );
       }
 
       // Form verilerini kontrol et
@@ -427,7 +447,7 @@ const Calendar = () => {
 
       // Zorunlu alanları kontrol et
       if (!eventData.age_group || !eventData.event_type) {
-        throw new Error('Zorunlu alanlar eksik');
+        throw new Error(language === 'tr' ? 'Zorunlu alanlar eksik' : 'Required fields are missing');
       }
 
       // Supabase'e etkinlik kaydetme işlemi
@@ -440,7 +460,7 @@ const Calendar = () => {
       if (eventError) throw eventError;
 
       if (!eventResult) {
-        throw new Error('Event creation failed');
+        throw new Error(language === 'tr' ? 'Etkinlik oluşturma başarısız' : 'Event creation failed');
       }
 
       // Katılımcıları ekle
@@ -458,13 +478,16 @@ const Calendar = () => {
       }
 
       // Başarı mesajı göster
-      showToast('Etkinlik başarıyla oluşturuldu', 'success');
+      showToast(
+        language === 'tr' ? 'Etkinlik başarıyla oluşturuldu' : 'Event created successfully', 
+        'success'
+      );
 
       // Etkinlikleri yeniden yükle
       await fetchEvents();
       handleCloseModal();
     } catch (error) {
-      console.error('Etkinlik oluşturulurken hata:', error);
+      console.error(language === 'tr' ? 'Etkinlik oluşturulurken hata:' : 'Error creating event:', error);
       showToast(error.message, 'error');
     }
   };
@@ -531,7 +554,7 @@ const Calendar = () => {
       const event = dropInfo.event;
       const newDate = event.start;
 
-      // Supabase'de etkinliği güncelle
+      // Update event in Supabase
       const { error } = await supabase
         .from('events')
         .update({ event_date: newDate.toISOString() })
@@ -542,14 +565,23 @@ const Calendar = () => {
         throw error;
       }
 
-      // Başarı mesajı göster
-      showToast('Etkinlik başarıyla taşındı', 'success');
+      // Show success message
+      showToast(
+        language === 'tr' ? 'Etkinlik başarıyla taşındı' : 'Event moved successfully', 
+        'success'
+      );
 
-      // Etkinlikleri yeniden yükle
+      // Reload events
       await fetchEvents();
     } catch (error) {
-      console.error('Etkinlik taşınırken hata:', error);
-      showToast('Etkinlik taşınırken bir hata oluştu', 'error');
+      console.error(
+        language === 'tr' ? 'Etkinlik taşınırken hata:' : 'Error moving event:', 
+        error
+      );
+      showToast(
+        language === 'tr' ? 'Etkinlik taşınırken bir hata oluştu' : 'An error occurred while moving the event', 
+        'error'
+      );
       dropInfo.revert();
     }
   };
@@ -1029,10 +1061,10 @@ const Calendar = () => {
   return (
     <div className="min-h-screen text-[#1d1d1f] dark:text-[#f5f5f7]">
       {/* Header */}
-      <div className="flex flex-wrap sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0 bg-white dark:bg-[#121621] mb-6 rounded-t-xl">
+      <div className="flex flex-wrap sm:flex-row items-start sm:items-center justify-between h-auto sm:h-16 px-6 border-b border-[#d2d2d7] dark:border-[#2a3241] py-4 sm:py-0 gap-4 sm:gap-0 bg-white dark:bg-[#1a1f2e] mb-6 rounded-t-xl">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-medium text-[#1d1d1f] dark:text-white">
-            Takvim
+            {language === 'tr' ? 'Takvim' : 'Calendar'}
           </h1>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
@@ -1043,7 +1075,7 @@ const Calendar = () => {
             className="h-10 sm:h-8 px-3 bg-purple-100 dark:bg-purple-800/20 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg hover:bg-purple-200 dark:hover:bg-purple-800/30 focus:outline-none transition-all duration-200 flex items-center justify-center gap-1.5 w-full sm:w-auto transform hover:scale-[1.02] active:scale-[0.98]"
           >
             <CalendarDaysIcon className="w-3.5 h-3.5" />
-            <span>Herkese Açık Takvim</span>
+            <span>{language === 'tr' ? 'Herkese Açık Takvim' : 'Public Calendar'}</span>
             <ArrowTopRightOnSquareIcon className="w-3 h-3" />
           </a>
           <button
@@ -1057,12 +1089,12 @@ const Calendar = () => {
             className="h-10 sm:h-8 px-4 bg-[#1d1d1f] dark:bg-[#0071e3] text-white text-sm font-medium rounded-lg hover:bg-black dark:hover:bg-[#0077ed] focus:outline-none transition-all duration-200 flex items-center justify-center gap-2 w-full sm:w-auto transform hover:scale-[1.02] active:scale-[0.98]"
           >
             <PlusIcon className="w-4 h-4" />
-            <span>Yeni Etkinlik</span>
+            <span>{language === 'tr' ? 'Yeni Etkinlik' : 'New Event'}</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-[#121621] rounded-xl overflow-hidden">
+      <div className="bg-white dark:bg-[#1a1f2e] rounded-xl overflow-hidden">
         <FullCalendar
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -1073,27 +1105,27 @@ const Calendar = () => {
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
           buttonText={{
-            today: 'Bugün',
-            month: 'Ay',
-            week: 'Hafta',
-            day: 'Gün'
+            today: language === 'tr' ? 'Bugün' : 'Today',
+            month: language === 'tr' ? 'Ay' : 'Month',
+            week: language === 'tr' ? 'Hafta' : 'Week',
+            day: language === 'tr' ? 'Gün' : 'Day'
           }}
           buttonClassNames="h-9 px-4 rounded-lg text-sm font-medium bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white border border-[#d2d2d7] dark:border-[#2a3241] hover:border-[#0071e3] dark:hover:border-[#0071e3] transition-colors whitespace-nowrap"
-          locale={trLocale}
+          locale={language === 'tr' ? trLocale : enLocale}
           selectable={true}
           select={handleDateSelect}
           events={events}
           eventClick={handleEventClick}
           eventContent={renderEventContent}
           viewDidMount={handleViewDidMount}
-          editable={true} // Sürükle-bırak için gerekli
-          eventDrop={handleEventDrop} // Sürükle-bırak işleyicisi
-          dragScroll={true} // Sürükleme sırasında otomatik kaydırma
-          snapDuration="00:15:00" // 15 dakikalık aralıklarla yerleştirme
-          eventDragStart={(info) => info.el.classList.add('event-dragging')} // Sürükleme başladığında class ekle
-          eventDragStop={(info) => info.el.classList.remove('event-dragging')} // Sürükleme bittiğinde class kaldır
-          droppable={true} // Dışarıdan sürükleme için (gelecekte kullanılabilir)
-          dropAccept=".fc-event" // Sadece etkinlikleri kabul et
+          editable={true} // Required for drag-and-drop
+          eventDrop={handleEventDrop} // Drag-and-drop handler
+          dragScroll={true} // Auto-scroll during dragging
+          snapDuration="00:15:00" // Place at 15-minute intervals
+          eventDragStart={(info) => info.el.classList.add('event-dragging')} // Add class when dragging starts
+          eventDragStop={(info) => info.el.classList.remove('event-dragging')} // Remove class when dragging ends
+          droppable={true} // For external dragging (can be used in the future)
+          dropAccept=".fc-event" // Accept only events
           height="auto"
           contentHeight="auto"
           aspectRatio={1.8}
@@ -1160,7 +1192,7 @@ const Calendar = () => {
       <ActionNotification 
         isVisible={isActionNotificationVisible}
         message={actionNotificationMessage}
-        actionText="Kopyalanan Haftaya Git"
+        actionText={language === 'tr' ? "Kopyalanan Haftaya Git" : "Go to Copied Week"}
         onAction={navigateToTargetWeek}
         onClose={() => setIsActionNotificationVisible(false)}
       />
