@@ -14,12 +14,15 @@ import {
 const Home = () => {
   const { t, language } = useLanguage();
   const [tomorrowEvents, setTomorrowEvents] = useState([]);
+  const [todayEvents, setTodayEvents] = useState([]);
   const [pendingPayments, setPendingPayments] = useState([]);
   const [expiringSoonPackages, setExpiringSoonPackages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingToday, setIsLoadingToday] = useState(true);
   const [isLoadingPayments, setIsLoadingPayments] = useState(true);
   const [isLoadingPackages, setIsLoadingPackages] = useState(true);
   const [sentMessages, setSentMessages] = useState({});
+  const [updatingLessonId, setUpdatingLessonId] = useState(null);
 
   // LocalStorage'dan verileri yükle ve eski tarihleri temizle
   const cleanupOldData = () => {
@@ -48,7 +51,8 @@ const Home = () => {
   const toggleMessageSent = (participantId, event) => {
     // Tıklama olayı olduğunda event parametresini durdurmamız gerekecek
     if (event) {
-      event.preventDefault(); // Eğer event parametresi varsa, varsayılan davranışı engelle
+      // Burada yalnızca propagasyonu durdur, ancak varsayılan davranışı engelleme
+      // çünkü WhatsApp'a gitsin istiyoruz
       event.stopPropagation(); // Event yayılımını engelle
     }
     
@@ -59,15 +63,15 @@ const Home = () => {
       updatedMessages[today] = [];
     }
     
-    // Toggle işlemi - eğer varsa sil, yoksa ekle
-    if (updatedMessages[today].includes(participantId)) {
-      updatedMessages[today] = updatedMessages[today].filter(id => id !== participantId);
-    } else {
+    // Sadece ekle, zaten tıklama olayı WhatsApp'a yönlendirmek için
+    if (!updatedMessages[today].includes(participantId)) {
       updatedMessages[today].push(participantId);
     }
     
     setSentMessages(updatedMessages);
     localStorage.setItem('sentWhatsAppMessages', JSON.stringify(updatedMessages));
+    
+    // Bu fonksiyon artık href'in çalışmasını engellemeyecek
   };
 
   // Yeni fonksiyon: Sadece mesaj gönderildi olarak işaretle (silme yapma)
@@ -122,12 +126,11 @@ const Home = () => {
       
       // Her ders için katılımcıları getir - ilişkisel sorgu yerine manuel işlemler yapacağız
       const eventsWithParticipants = await Promise.all(events.map(async (event) => {
-        // 1. Önce event_participants tablosundan katılımcıları çek
+        // 1. Önce event_participants tablosundan katılımcıları çek - TÜM STATÜLER
         const { data: participants, error: participantsError } = await supabase
           .from('event_participants')
           .select('*')
           .eq('event_id', event.id)
-          .eq('status', 'scheduled')
           .order('created_at');
         
         if (participantsError) throw participantsError;
@@ -171,6 +174,84 @@ const Home = () => {
       console.error('Yarınki dersler çekilirken hata oluştu:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Bugünkü dersleri ve katılımcıları çeken fonksiyon
+  const fetchTodayEvents = async () => {
+    setIsLoadingToday(true);
+    
+    // Bugünün başlangıç ve bitiş tarihlerini hesapla
+    const today = new Date();
+    
+    const todayStart = new Date(today);
+    todayStart.setHours(0, 0, 0, 0);
+    
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
+    
+    try {
+      // Bugünkü dersleri sorgula
+      const { data: events, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .gte('event_date', todayStart.toISOString())
+        .lte('event_date', todayEnd.toISOString())
+        .eq('is_active', true)
+        .order('event_date', { ascending: true });
+      
+      if (eventsError) throw eventsError;
+      
+      // Her ders için katılımcıları getir - ilişkisel sorgu yerine manuel işlemler yapacağız
+      const eventsWithParticipants = await Promise.all(events.map(async (event) => {
+        // 1. Önce event_participants tablosundan katılımcıları çek - TÜM STATÜLER
+        const { data: participants, error: participantsError } = await supabase
+          .from('event_participants')
+          .select('*')
+          .eq('event_id', event.id)
+          .order('created_at');
+        
+        if (participantsError) throw participantsError;
+        
+        // Katılımcı yoksa, hemen boş bir dizi döndür
+        if (!participants || participants.length === 0) {
+          return {
+            ...event,
+            participants: []
+          };
+        }
+        
+        // 2. Katılımcıların registration_id'lerini çıkar
+        const registrationIds = participants.map(p => p.registration_id);
+        
+        // 3. Bu registration_id'ler için registrations tablosundan bilgileri çek
+        const { data: registrations, error: registrationsError } = await supabase
+          .from('registrations')
+          .select('id, student_name, student_age, parent_name, parent_phone')
+          .in('id', registrationIds);
+        
+        if (registrationsError) throw registrationsError;
+        
+        // 4. Kayıt bilgilerini katılımcılarla birleştir
+        const participantsWithDetails = participants.map(participant => {
+          const registration = registrations.find(r => r.id === participant.registration_id);
+          return {
+            ...participant,
+            registrations: registration // Yapı önceki ile uyumlu olması için "registrations" olarak bırakıyoruz
+          };
+        });
+        
+        return {
+          ...event,
+          participants: participantsWithDetails || []
+        };
+      }));
+      
+      setTodayEvents(eventsWithParticipants);
+    } catch (error) {
+      console.error('Bugünkü dersler çekilirken hata oluştu:', error);
+    } finally {
+      setIsLoadingToday(false);
     }
   };
 
@@ -223,8 +304,32 @@ const Home = () => {
     }
   };
 
+  // Ders statüsünü güncelleyen fonksiyon
+  const updateLessonStatus = async (lessonId, newStatus) => {
+    try {
+      setUpdatingLessonId(lessonId);
+      
+      const { error } = await supabase
+        .from('event_participants')
+        .update({ status: newStatus })
+        .eq('id', lessonId);
+      
+      if (error) throw error;
+      
+      // Başarılı güncelleme sonrası sadece bugünkü dersler verilerini yenile
+      // Yarınki dersleri skeleton loading'e sokmamak için sadece bugünkü dersleri yeniliyoruz
+      fetchTodayEvents();
+      
+    } catch (error) {
+      console.error('Ders statüsü güncellenirken hata oluştu:', error);
+    } finally {
+      setUpdatingLessonId(null);
+    }
+  };
+
   useEffect(() => {
     fetchTomorrowEvents();
+    fetchTodayEvents();
     fetchPendingPayments();
     fetchExpiringSoonPackages();
   }, []);
@@ -261,6 +366,9 @@ const Home = () => {
     'd MMMM EEEE'
   );
 
+  // Bugün için tarih formatını hazırla
+  const todayDateString = formatDate(new Date(), 'd MMMM EEEE');
+
   // Masonry breakpoints
   const breakpointColumns = {
     default: 4,
@@ -268,6 +376,25 @@ const Home = () => {
     1280: 2,
     768: 1,
     640: 1
+  };
+
+  // Duruma göre renk ve etiket tanımlamaları ekleyelim
+  const statusColors = {
+    'scheduled': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-300 dark:border-blue-800/50',
+    'attended': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-300 dark:border-green-800/50',
+    'no_show': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 border border-red-300 dark:border-red-800/50',
+    'canceled': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300 border border-gray-300 dark:border-gray-800/50',
+    'makeup': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-300 dark:border-purple-800/50',
+    'postponed': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-300 dark:border-amber-800/50'
+  };
+
+  const statusLabels = {
+    'scheduled': { tr: 'Planlandı', en: 'Scheduled' },
+    'attended': { tr: 'Katıldı', en: 'Joined' },
+    'no_show': { tr: 'Gelmedi', en: 'Absent' },
+    'canceled': { tr: 'İptal', en: 'Canceled' },
+    'makeup': { tr: 'Telafi', en: 'Makeup' },
+    'postponed': { tr: 'Ertelendi', en: 'Delayed' }
   };
 
   return (
@@ -393,7 +520,8 @@ const Home = () => {
                         {event.age_group}
                       </h3>
                       <p className="text-[13px] text-[#6e6e73] dark:text-[#86868b] mt-0.5">
-                        {language === 'en' ? 'Capacity: ' : 'Kapasite: '}{event.current_capacity}/5
+                        {language === 'en' ? 'Capacity: ' : 'Kapasite: '}
+                        {event.participants.filter(p => p.status === 'scheduled' || p.status === 'makeup' || p.status === 'attended').length}/5
                       </p>
                     </div>
                     <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium ${eventTypeColors[event.event_type]}`}>
@@ -415,7 +543,7 @@ const Home = () => {
                   <div className="mt-4">
                     <h4 className="text-[13px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-1.5 mb-3">
                       <FiUsers className="w-4 h-4 text-[#0071e3]" />
-                      {language === 'en' ? 'Participants' : 'Katılımcılar'} ({event.participants.length})
+                      {language === 'en' ? 'Participants' : 'Katılımcılar'} ({event.participants.filter(p => p.status === 'scheduled' || p.status === 'makeup' || p.status === 'attended').length}/{event.participants.length})
                     </h4>
 
                     {event.participants.length === 0 ? (
@@ -436,12 +564,14 @@ const Home = () => {
                                     {participant.registrations.student_name.charAt(0)}
                                   </div>
                                   <div>
+                                    <div className="flex items-center gap-2">
                                     <p className="text-[13px] font-medium text-[#1d1d1f] dark:text-white">
                                       {participant.registrations.student_name}
                                       <span className="ml-1.5 text-[11px] text-[#6e6e73] dark:text-[#86868b] font-normal">
                                         ({participant.registrations.student_age})
                                       </span>
                                     </p>
+                                    </div>
                                     <p className="text-[11px] text-[#6e6e73] dark:text-[#86868b]">
                                       {language === 'en' ? 'Parent: ' : 'Veli: '}{participant.registrations.parent_name}
                                     </p>
@@ -449,17 +579,13 @@ const Home = () => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                {/* Tik işareti sol tarafta ve sadece mesaj gönderildiğinde görünür */}
-                                {isMessageSent(participant.id) && (
-                                  <button 
-                                    onClick={(e) => toggleMessageSent(participant.id, e)}
-                                    className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0071e3]/10 text-[#0071e3] dark:bg-[#0071e3]/20 dark:text-[#0071e3] border border-[#0071e3]/30 hover:bg-[#0071e3]/20 dark:hover:bg-[#0071e3]/30 transition-colors cursor-pointer"
-                                    title={language === 'en' ? 'Message Sent - Click to Remove' : 'Mesaj Gönderildi - Kaldırmak için tıklayın'}
-                                  >
-                                    <FaCheck className="w-3 h-3" />
-                                  </button>
-                                )}
+                                {/* Statü Etiketi */}
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center justify-center ${statusColors[participant.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
+                                  {statusLabels[participant.status]?.[language] || participant.status}
+                                </span>
                                 
+                                {/* WhatsApp butonu - sadece scheduled durumdaki öğrenciler için gösterilsin */}
+                                {participant.status === 'scheduled' && (
                                 <a 
                                   href={`https://wa.me/90${participant.registrations.parent_phone.replace(/\D/g, '').replace(/^0+/, '')}?text=${encodeURIComponent(`Merhaba ${participant.registrations.parent_name} Hanım 😊
 Çocuğunuzun etkinliğimizde bize katılacak olmasından büyük mutluluk duyuyoruz! İşte rezervasyonunuzla ilgili detaylar:
@@ -474,14 +600,246 @@ Eğer herhangi bir sorunuz varsa, lütfen bize ulaşmaktan çekinmeyin.
 Sizleri ve çocuğunuzu atölyemizde görmek için sabırsızlanıyoruz!
 Sevgilerle,
 HelloKido Oyun Atölyesi 🌸`)}`}
-                                  onClick={() => addMessageSent(participant.id)}
+                                    onClick={(e) => toggleMessageSent(participant.id, e)}
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors"
+                                    className="w-8 h-8 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] hover:bg-[#e5e5e5] dark:hover:bg-[#3a4251] flex items-center justify-center text-[#34c759] border border-[#d2d2d7] dark:border-[#2a3241] transition-colors relative"
                                   title={language === 'en' ? 'Send Reminder via WhatsApp' : 'WhatsApp\'tan Hatırlatma Mesajı Gönder'}
                                 >
                                   <FaWhatsapp className="w-4 h-4" />
-                                </a>
+                                    {isMessageSent(participant.id) && (
+                                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-white dark:bg-[#2a3241] rounded-full flex items-center justify-center border border-[#d2d2d7] dark:border-[#1c1c1e]">
+                                        <FaCheck className="w-2 h-2 text-[#34c759]" />
+                                      </div>
+                                    )}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </Masonry>
+        )}
+
+        {/* Bugünkü Dersler Header */}
+        <div className="flex items-center justify-between mb-6 mt-10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-[#ff9500]/10 border border-[#ff9500]/20 flex items-center justify-center self-start sm:self-center">
+              <FiClock className="h-4 w-4 text-[#ff9500]" />
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+              <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-white">
+                {language === 'en' ? 'Today\'s Lessons' : 'Bugünkü Dersler'}
+              </h2>
+              <span className="text-sm text-[#6e6e73] dark:text-[#86868b] capitalize sm:ml-2">
+                ({todayDateString})
+              </span>
+            </div>
+          </div>
+          <button 
+            onClick={fetchTodayEvents} 
+            className="flex items-center gap-1.5 text-[#ff9500] hover:text-[#ffA520] text-sm font-medium"
+          >
+            <ArrowPathIcon className="h-4 w-4" />
+            <span>{language === 'en' ? 'Refresh' : 'Yenile'}</span>
+          </button>
+        </div>
+
+        {isLoadingToday ? (
+          // Loading State
+          <Masonry
+            breakpointCols={breakpointColumns}
+            className="flex -ml-6 w-auto"
+            columnClassName="pl-6"
+          >
+            {[...Array(2)].map((_, index) => (
+              <div
+                key={index}
+                className="mb-6 bg-white dark:bg-[#121621] rounded-xl p-5 border border-[#d2d2d7] dark:border-[#2a3241] relative overflow-hidden"
+              >
+                {/* Kart Başlığı */}
+                <div className="flex items-start justify-between pb-4 border-b border-[#d2d2d7] dark:border-[#2a3241]">
+                  <div>
+                    <div className="h-[18px] bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md w-32 relative overflow-hidden">
+                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                    </div>
+                    <div className="h-[16px] bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md w-20 mt-1.5 relative overflow-hidden">
+                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                    </div>
+                  </div>
+                  <div className="h-[26px] bg-[#f5f5f7] dark:bg-[#2a3241] rounded-lg w-24 relative overflow-hidden">
+                    <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                  </div>
+                </div>
+
+                {/* Placeholder İçerik */}
+                <div className="mt-4 space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="flex gap-2">
+                      <div className="w-5 h-5 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] relative overflow-hidden">
+                        <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                      </div>
+                      <div className="flex-1 h-5 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md relative overflow-hidden">
+                        <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/20 dark:via-white/5 to-transparent" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </Masonry>
+        ) : todayEvents.length === 0 ? (
+          // Boş State
+          <div className="text-center py-12 bg-white dark:bg-[#121621] rounded-xl border border-[#d2d2d7] dark:border-[#2a3241]">
+            <FiClock className="w-12 h-12 mx-auto text-[#86868b] mb-4" />
+            <h3 className="text-lg font-medium text-[#1d1d1f] dark:text-white mb-1">
+              {language === 'en' ? 'No lessons for today' : 'Bugün için ders bulunmuyor'}
+            </h3>
+            <p className="text-sm text-[#6e6e73] dark:text-[#86868b] max-w-md mx-auto">
+              {language === 'en' 
+                ? 'There are no lessons scheduled for today. You can add new lessons from the Calendar page.' 
+                : 'Bugün için planlanmış herhangi bir ders bulunmuyor. Takvim sayfasından yeni ders ekleyebilirsiniz.'}
+            </p>
+          </div>
+        ) : (
+          // Dersler
+          <Masonry
+            breakpointCols={breakpointColumns}
+            className="flex -ml-6 w-auto"
+            columnClassName="pl-6"
+          >
+            {todayEvents.map((event) => (
+              <div
+                key={event.id}
+                className="mb-6 group bg-white dark:bg-[#121621] rounded-xl border border-[#d2d2d7] dark:border-[#2a3241] hover:border-[#ff9500] dark:hover:border-[#ff9500] hover:shadow-lg dark:hover:shadow-[#ff9500]/10 transition-all duration-200 relative overflow-hidden"
+              >
+                <div className="p-5">
+                  {/* Kart Başlığı */}
+                  <div className="flex items-start justify-between pb-4 border-b border-[#d2d2d7] dark:border-[#2a3241]">
+                    <div>
+                      <h3 className="text-[15px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-2">
+                        {formatDate(new Date(event.event_date), 'HH:mm')}
+                        <span className="text-[#6e6e73] dark:text-[#86868b]">|</span>
+                        {event.age_group}
+                      </h3>
+                      <p className="text-[13px] text-[#6e6e73] dark:text-[#86868b] mt-0.5">
+                        {language === 'en' ? 'Capacity: ' : 'Kapasite: '}
+                        {event.participants.filter(p => p.status === 'scheduled' || p.status === 'makeup' || p.status === 'attended').length}/5
+                      </p>
+                    </div>
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium ${eventTypeColors[event.event_type]}`}>
+                      {eventTypeIcons[event.event_type]}
+                    </div>
+                  </div>
+
+                  {/* Açıklama (varsa) */}
+                  {event.custom_description && (
+                    <div className="mt-4 mb-4 text-[13px] text-[#424245] dark:text-[#86868b] bg-[#f5f5f7] dark:bg-[#1c1c1e]/40 p-3 rounded-lg">
+                      <div className="flex gap-2">
+                        <FiInfo className="w-[18px] h-[18px] shrink-0 text-[#ff9500]" />
+                        <p>{event.custom_description}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Katılımcılar */}
+                  <div className="mt-4">
+                    <h4 className="text-[13px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-1.5 mb-3">
+                      <FiUsers className="w-4 h-4 text-[#ff9500]" />
+                      {language === 'en' ? 'Participants' : 'Katılımcılar'} ({event.participants.filter(p => p.status === 'scheduled' || p.status === 'makeup' || p.status === 'attended').length}/{event.participants.length})
+                    </h4>
+
+                    {event.participants.length === 0 ? (
+                      <p className="text-[13px] text-[#6e6e73] dark:text-[#86868b] italic">
+                        {language === 'en' ? 'No participants yet' : 'Henüz katılımcı yok'}
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {event.participants.map((participant) => (
+                          <div 
+                            key={participant.id}
+                            className="p-3 bg-[#f5f5f7] dark:bg-[#1c1c1e]/40 rounded-lg"
+                          >
+                            <div className="flex flex-col">
+                              <div className="flex items-start justify-between mb-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-[#ff9500]/10 flex items-center justify-center text-[#ff9500] text-xs font-medium">
+                                      {participant.registrations.student_name.charAt(0)}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-[13px] font-medium text-[#1d1d1f] dark:text-white">
+                                          {participant.registrations.student_name}
+                                          <span className="ml-1.5 text-[11px] text-[#6e6e73] dark:text-[#86868b] font-normal">
+                                            ({participant.registrations.student_age})
+                                          </span>
+                                        </p>
+                                      </div>
+                                      <p className="text-[11px] text-[#6e6e73] dark:text-[#86868b]">
+                                        {language === 'en' ? 'Parent: ' : 'Veli: '}{participant.registrations.parent_name}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                                {/* Statü Etiketi - Sağ Üst Köşeye Taşındı */}
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center justify-center ${statusColors[participant.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
+                                  {statusLabels[participant.status]?.[language] || participant.status}
+                                </span>
+                              </div>
+                              
+                              {/* Statü Butonları - Planlandı butonu kaldırıldı */}
+                              <div className="grid grid-cols-2 sm:flex sm:flex-row items-center justify-center gap-2 mt-1 w-full">
+                                <button 
+                                  onClick={() => updateLessonStatus(participant.id, 'attended')}
+                                  disabled={updatingLessonId === participant.id}
+                                  className={`flex-1 px-3 py-1 text-[11px] font-medium rounded-full border transition ${
+                                    participant.status === 'attended'
+                                      ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/50'
+                                      : 'bg-white text-gray-700 border-gray-300 hover:bg-green-50 hover:text-green-700 hover:border-green-300 dark:bg-[#1c1c1e]/40 dark:text-gray-300 dark:border-gray-700'
+                                  }`}
+                                >
+                                  {language === 'en' ? 'Joined' : 'Katıldı'}
+                                </button>
+                                <button 
+                                  onClick={() => updateLessonStatus(participant.id, 'no_show')}
+                                  disabled={updatingLessonId === participant.id}
+                                  className={`flex-1 px-3 py-1 text-[11px] font-medium rounded-full border transition ${
+                                    participant.status === 'no_show'
+                                      ? 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800/50'
+                                      : 'bg-white text-gray-700 border-gray-300 hover:bg-red-50 hover:text-red-700 hover:border-red-300 dark:bg-[#1c1c1e]/40 dark:text-gray-300 dark:border-gray-700'
+                                  }`}
+                                >
+                                  {language === 'en' ? 'Absent' : 'Gelmedi'}
+                                </button>
+                                <button 
+                                  onClick={() => updateLessonStatus(participant.id, 'postponed')}
+                                  disabled={updatingLessonId === participant.id}
+                                  className={`flex-1 px-3 py-1 text-[11px] font-medium rounded-full border transition ${
+                                    participant.status === 'postponed'
+                                      ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50'
+                                      : 'bg-white text-gray-700 border-gray-300 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 dark:bg-[#1c1c1e]/40 dark:text-gray-300 dark:border-gray-700'
+                                  }`}
+                                >
+                                  {language === 'en' ? 'Delayed' : 'Ertelendi'}
+                                </button>
+                                <button 
+                                  onClick={() => updateLessonStatus(participant.id, 'makeup')}
+                                  disabled={updatingLessonId === participant.id}
+                                  className={`flex-1 px-3 py-1 text-[11px] font-medium rounded-full border transition ${
+                                    participant.status === 'makeup'
+                                      ? 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/50'
+                                      : 'bg-white text-gray-700 border-gray-300 hover:bg-purple-50 hover:text-purple-700 hover:border-purple-300 dark:bg-[#1c1c1e]/40 dark:text-gray-300 dark:border-gray-700'
+                                  }`}
+                                >
+                                  {language === 'en' ? 'Makeup' : 'Telafi'}
+                                </button>
                               </div>
                             </div>
                           </div>
