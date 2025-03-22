@@ -98,7 +98,28 @@ const PublicCalendar = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      setEvents(data);
+      
+      // Her etkinlik için aktif katılımcı sayısını getir
+      const eventsWithActiveCapacity = await Promise.all(data.map(async (event) => {
+        const { data: participants, error: participantsError } = await supabase
+          .from('event_participants')
+          .select('status')
+          .eq('event_id', event.id);
+          
+        if (participantsError) throw participantsError;
+        
+        // Aktif statüdeki katılımcıları say (scheduled, makeup, attended)
+        const activeCount = participants ? 
+          participants.filter(p => p.status === 'scheduled' || p.status === 'makeup' || p.status === 'attended').length : 
+          0;
+        
+        return {
+          ...event,
+          active_capacity: activeCount
+        };
+      }));
+      
+      setEvents(eventsWithActiveCapacity);
     } catch (err) {
       console.error('Error fetching events:', err);
       setError(err.message);
@@ -333,8 +354,8 @@ const PublicCalendar = () => {
                   ) : (
                     dayEvents.map(event => {
                       const typeDetails = getEventTypeDetails(event.event_type);
-                      // Maksimum kapasiteyi 5 kişi olarak hesapla (gerçekte 10 olsa bile)
-                      const availableSpots = 5 - event.current_capacity;
+                      // Aktif katılımcı sayısına göre kalan kontenjanı hesapla
+                      const availableSpots = 5 - event.active_capacity;
                       const hasSpots = availableSpots > 0;
                       
                       return (
