@@ -459,18 +459,19 @@ export default function IncomeExpense() {
       const startDate = dateRange[0]
       const endDate = dateRange[1]
 
-      // 1. Bu ayki gelirleri getir (registrations tablosundan)
+      // 1. Bu ayki gelirleri getir (financial_records tablosundan)
       const { data: incomeData, error: incomeError } = await supabase
         .from('financial_records')
         .select(`
           amount,
           payment_status,
+          transaction_type,
           registrations (
             package_start_date,
             package_end_date
           )
         `)
-        .eq('transaction_type', 'initial_payment')
+        .in('transaction_type', ['initial_payment', 'extension_payment'])
         .eq('payment_status', 'odendi')
 
       if (incomeError) throw incomeError
@@ -553,17 +554,18 @@ export default function IncomeExpense() {
       const selectedMonthsAgo = new Date()
       selectedMonthsAgo.setMonth(selectedMonthsAgo.getMonth() - (chartRange - 1))
 
-      // Gelirler
+      // Gelirler - hem ilk kayıt hem uzatma işlemlerini dahil edelim
       const { data: monthlyIncomeData, error: monthlyIncomeError } = await supabase
         .from('financial_records')
         .select(`
           amount, 
           created_at,
+          transaction_type,
           registrations (
             package_start_date
           )
         `)
-        .eq('transaction_type', 'initial_payment')
+        .in('transaction_type', ['initial_payment', 'extension_payment'])
         .eq('payment_status', 'odendi')
         .gte('created_at', selectedMonthsAgo.toISOString())
         .order('created_at', { ascending: true })
@@ -630,6 +632,7 @@ export default function IncomeExpense() {
   // Gelir tablosu verilerini getir
   const fetchIncomeTableData = async () => {
     try {
+      // 1. Önce tüm finansal kayıtları getirelim
       const { data, error } = await supabase
         .from('financial_records')
         .select(`
@@ -638,6 +641,8 @@ export default function IncomeExpense() {
           payment_method,
           payment_status,
           created_at,
+          transaction_type,
+          registration_id,
           notes,
           registrations (
             student_name,
@@ -645,23 +650,83 @@ export default function IncomeExpense() {
             package_type,
             package_start_date,
             package_end_date,
-            is_active
+            is_active,
+            initial_start_date,
+            initial_end_date,
+            initial_package_type
           )
         `)
-        .eq('transaction_type', 'initial_payment')
+        .in('transaction_type', ['initial_payment', 'extension_payment'])
+        .eq('payment_status', 'odendi')
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      // Tarihe göre filtrelemeyi veritabanı sorgusunda değil, JS tarafında yapıyoruz
-      const filteredData = data.filter(record => {
-        const packageStartDate = new Date(record.registrations.package_start_date);
-        const packageEndDate = new Date(record.registrations.package_end_date || record.registrations.package_start_date);
+      // 2. Uzatma geçmişini de getirelim
+      const { data: extensionData, error: extensionError } = await supabase
+        .from('extension_history')
+        .select('*')
+
+      if (extensionError) throw extensionError
+
+      // 3. Verilerimizi işleyelim
+      const formattedData = await Promise.all(data.map(async (record) => {
+        let displayStartDate, displayEndDate, displayPackageType;
+
+        if (record.transaction_type === 'initial_payment') {
+          // İlk kayıt için kaydedilen ilk tarihleri kullan
+          displayStartDate = record.registrations.initial_start_date || record.registrations.package_start_date;
+          displayEndDate = record.registrations.initial_end_date || record.registrations.package_end_date; 
+          displayPackageType = record.registrations.initial_package_type || record.registrations.package_type;
+        } else {
+          // Uzatma işlemi için extension_history tablosundan ilgili uzatma kaydını bul
+          // Uzatma işlemleri için created_at tarihine en yakın extension_history kaydını bul
+          const extensionRecord = extensionData
+            .filter(ext => ext.registration_id === record.registration_id)
+            .find(ext => {
+              // Yaklaşık olarak aynı zamanda oluşturulmuş olanları bul (5 dakika içinde)
+              const recordDate = new Date(record.created_at);
+              const extDate = new Date(ext.created_at);
+              const diffMinutes = Math.abs(recordDate - extDate) / (1000 * 60);
+              return diffMinutes < 5;
+            });
+
+          if (extensionRecord) {
+            // Uzatma kaydı bulunduysa onun tarih bilgilerini kullan
+            displayStartDate = extensionRecord.previous_end_date;
+            displayEndDate = extensionRecord.new_end_date;
+            displayPackageType = extensionRecord.new_package_type;
+          } else {
+            // Bulunamadıysa mevcut tarih bilgilerini kullan
+            displayStartDate = record.registrations.package_start_date;
+            displayEndDate = record.registrations.package_end_date;
+            displayPackageType = record.registrations.package_type;
+          }
+        }
+
+        return {
+          id: record.id,
+          student: record.registrations.student_name,
+          parent: record.registrations.parent_name,
+          package: displayPackageType,
+          date: displayStartDate,
+          end_date: displayEndDate,
+          is_active: record.registrations.is_active,
+          amount: record.amount,
+          method: record.payment_method,
+          status: record.payment_status,
+          transaction_type: record.transaction_type === 'initial_payment' 
+            ? (language === 'tr' ? 'İlk Kayıt' : 'Initial Registration')
+            : (language === 'tr' ? 'Paket Uzatma' : 'Package Extension'),
+          created_at: record.created_at
+        };
+      }));
+
+      // 4. Tarihe göre filtreleme yap
+      const filteredData = formattedData.filter(record => {
+        const packageStartDate = new Date(record.date);
+        const packageEndDate = new Date(record.end_date || record.date);
         
-        // Paket şu üç durumdan birinde filtrelemeye uyar:
-        // 1. Başlangıç tarihi filtrelenen aralıkta
-        // 2. Bitiş tarihi filtrelenen aralıkta 
-        // 3. Paket tüm filtrelenen aralığı kapsıyor
         return (
           (packageStartDate >= dateRange[0] && packageStartDate <= dateRange[1]) || // Başlangıç tarihi aralıkta
           (packageEndDate >= dateRange[0] && packageEndDate <= dateRange[1]) || // Bitiş tarihi aralıkta
@@ -669,23 +734,9 @@ export default function IncomeExpense() {
         );
       });
 
-      const formattedData = filteredData.map(record => ({
-        id: record.id,
-        student: record.registrations.student_name,
-        parent: record.registrations.parent_name,
-        package: record.registrations.package_type,
-        date: record.registrations.package_start_date,
-        end_date: record.registrations.package_end_date,
-        is_active: record.registrations.is_active,
-        amount: record.amount,
-        method: record.payment_method,
-        status: record.payment_status,
-        created_at: record.created_at // Ödemenin gerçekte ne zaman yapıldığı bilgisini de saklıyoruz
-      }))
-
-      setIncomeTableData(formattedData)
+      setIncomeTableData(filteredData);
     } catch (error) {
-      console.error('Gelir tablosu verileri getirilirken hata:', error.message)
+      console.error('Gelir tablosu verileri getirilirken hata:', error.message);
     }
   }
 
@@ -1627,7 +1678,7 @@ export default function IncomeExpense() {
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                 {applyFilters(expenseTableData, 'expense').length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 px-4">
                     <div className="w-16 h-16 mb-4 rounded-full bg-[#f5f5f7] dark:bg-[#1d1d1f] flex items-center justify-center">
@@ -1810,7 +1861,7 @@ export default function IncomeExpense() {
             </div>
 
             {/* Expense Distribution Pie Chart - Takes up 1/3 */}
-            <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] p-6">
+            <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] p-6 max-h-[485px] overflow-auto">
               <div className="space-y-1 mb-6">
                 <h2 className="text-[15px] font-medium text-[#1d1d1f] dark:text-white">
                   {language === 'tr' ? 'Gider Dağılımı' : 'Expense Distribution'}
