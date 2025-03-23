@@ -377,6 +377,12 @@ export default function IncomeExpense() {
     pendingCount: 0
   })
 
+  // Filtrelenmiş gelir toplam datası için yeni state ekliyorum
+  const [filteredSummaryData, setFilteredSummaryData] = useState({
+    filteredIncome: 0,
+    filteredExpense: 0
+  })
+
   // Grafik verisi için state
   const [chartData, setChartData] = useState([])
   const [chartRange, setChartRange] = useState(6) // Yeni state: default 6 ay
@@ -391,7 +397,7 @@ export default function IncomeExpense() {
   // Filtreler için state
   const [incomeFilters, setIncomeFilters] = useState({
     paymentMethod: '',
-    dateRange: null,
+    dateRange: [],  // null yerine boş dizi kullanıyoruz
     paymentStatus: '',
     activeStatus: '',
     search: ''
@@ -400,7 +406,7 @@ export default function IncomeExpense() {
   const [expenseFilters, setExpenseFilters] = useState({
     expenseType: '',
     paymentMethod: '',
-    dateRange: null
+    dateRange: []  // null yerine boş dizi kullanıyoruz
   })
 
   const [isIncomeFilterSheetOpen, setIsIncomeFilterSheetOpen] = useState(false)
@@ -633,6 +639,7 @@ export default function IncomeExpense() {
   const fetchIncomeTableData = async () => {
     try {
       // 1. Önce tüm finansal kayıtları getirelim
+      // Bütün finansal kayıtları getirelim, filtrelemeyi sonra yapalım
       const { data, error } = await supabase
         .from('financial_records')
         .select(`
@@ -657,7 +664,7 @@ export default function IncomeExpense() {
           )
         `)
         .in('transaction_type', ['initial_payment', 'extension_payment'])
-        .eq('payment_status', 'odendi')
+        .in('payment_status', ['odendi', 'beklemede']) // Hem ödendi hem bekleyen kayıtları getirelim
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -734,7 +741,13 @@ export default function IncomeExpense() {
         );
       });
 
-      setIncomeTableData(filteredData);
+      // 5. Varsayılan olarak sadece "odendi" durumundaki kayıtları gösterelim
+      // Ancak filtre uygulanmışsa ve "beklemede" seçilmişse, o durumda bekleyen kayıtları gösterelim
+      const paymentStatusFiltered = incomeFilters.paymentStatus 
+        ? filteredData.filter(record => record.status === incomeFilters.paymentStatus)
+        : filteredData.filter(record => record.status === 'odendi'); // Varsayılan olarak sadece ödenmiş olanları göster
+
+      setIncomeTableData(paymentStatusFiltered);
     } catch (error) {
       console.error('Gelir tablosu verileri getirilirken hata:', error.message);
     }
@@ -833,7 +846,7 @@ export default function IncomeExpense() {
   const applyFilters = (data, filterType) => {
     const currentFilters = filterType === 'income' ? incomeFilters : expenseFilters;
     
-    return data.filter(item => {
+    const filteredData = data.filter(item => {
       // Search filter for income
       let searchMatch = true;
       if (filterType === 'income' && currentFilters.search) {
@@ -858,7 +871,8 @@ export default function IncomeExpense() {
       
       let categoryMatch = true;
       if (filterType === 'income') {
-        categoryMatch = !currentFilters.dateRange || (
+        // Burada dateRange kontrolünü düzenliyoruz - null veya boş dizi kontrolü
+        categoryMatch = !currentFilters.dateRange || !currentFilters.dateRange.length || (
           new Date(item.date) >= currentFilters.dateRange[0] &&
           new Date(item.date) <= currentFilters.dateRange[1]
         );
@@ -868,6 +882,31 @@ export default function IncomeExpense() {
       
       return searchMatch && methodMatch && categoryMatch && statusMatch && activeStatusMatch;
     });
+
+    // Filtrelemeden sonra toplam tutarları hesaplama
+    if (filterType === 'income') {
+      // Yeni bir filtrelenmiş gelir hesaplaması yapıyoruz
+      const filteredIncome = filteredData.reduce((total, item) => total + item.amount, 0);
+      
+      // Mevcut filtrelenmiş toplam ile farklı ise state güncelleniyor
+      if (filteredSummaryData.filteredIncome !== filteredIncome) {
+        setFilteredSummaryData(prev => ({
+          ...prev,
+          filteredIncome: filteredIncome
+        }));
+      }
+    } else if (filterType === 'expense') {
+      // Gider için benzer hesaplama
+      const filteredExpense = filteredData.reduce((total, item) => total + item.amount, 0);
+      if (filteredSummaryData.filteredExpense !== filteredExpense) {
+        setFilteredSummaryData(prev => ({
+          ...prev,
+          filteredExpense: filteredExpense
+        }));
+      }
+    }
+    
+    return filteredData;
   };
 
   useEffect(() => {
@@ -884,6 +923,25 @@ export default function IncomeExpense() {
       fetchExpenseTableData()
     }
   }, [incomeFilters, expenseFilters])
+
+  // Yeni useEffect - Filtreler değiştiğinde filtrelenmiş verileri hazırla
+  // Bu sadece veriler hazır olduğunda çalışacak
+  useEffect(() => {
+    if (!isTableLoading && incomeTableData.length > 0) {
+      // Bu useEffect içinde doğrudan applyFilters çağırmıyoruz
+      // Çünkü applyFilters hem filtreleme yapıp hem de state güncellediği için
+      // sonsuz döngüye neden olabilir
+      const filtered = incomeTableData.filter(item => {
+        return !incomeFilters.paymentMethod || item.method.toLowerCase() === incomeFilters.paymentMethod;
+      });
+      
+      const filteredIncome = filtered.reduce((total, item) => total + item.amount, 0);
+      setFilteredSummaryData(prev => ({
+        ...prev,
+        filteredIncome: filteredIncome
+      }));
+    }
+  }, [isTableLoading, incomeFilters.paymentMethod, incomeTableData]);
 
   // Para formatı
   const formatCurrency = (amount) => {
@@ -1171,7 +1229,14 @@ export default function IncomeExpense() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  setIncomeFilters({ paymentMethod: '', dateRange: null, paymentStatus: '', activeStatus: '' })
+                  // Filtreleri temizlerken dateRange'i [] olarak ayarlıyoruz, null değil
+                  setIncomeFilters({
+                    paymentMethod: '',
+                    dateRange: [],  // null yerine boş dizi
+                    paymentStatus: '',
+                    activeStatus: '',
+                    search: ''
+                  })
                   setIsIncomeFilterSheetOpen(false)
                 }}
                 className="flex-1 h-10 bg-gray-100 dark:bg-[#1d1d1f] text-[#1d1d1f] dark:text-white font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-[#2a3241] focus:outline-none transition-colors"
@@ -1296,7 +1361,12 @@ export default function IncomeExpense() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  setExpenseFilters({ expenseType: '', paymentMethod: '', dateRange: null })
+                  // Gider filtreleri için de aynı şekilde dateRange'i [] olarak ayarlıyoruz
+                  setExpenseFilters({
+                    expenseType: '',
+                    paymentMethod: '',
+                    dateRange: []  // null yerine boş dizi
+                  })
                   setIsExpenseFilterSheetOpen(false)
                 }}
                 className="flex-1 h-10 bg-gray-100 dark:bg-[#1d1d1f] text-[#1d1d1f] dark:text-white font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-[#2a3241] focus:outline-none transition-colors"
@@ -1338,13 +1408,24 @@ export default function IncomeExpense() {
             </>
           ) : (
             <>
-              {/* Aylık Gelir */}
+              {/* Aylık Gelir - Şimdi filtreye duyarlı */}
               <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden group hover:border-[#0071e3] dark:hover:border-[#0071e3] hover:shadow-lg dark:hover:shadow-[#0071e3]/10 transition-all duration-200">
                 <div className="h-1 w-full bg-[#0071e3]" />
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[#6e6e73] dark:text-[#86868b] text-sm font-medium">
                       {language === 'tr' ? 'Gelir' : 'Income'}
+                      {incomeFilters.paymentMethod && (
+                        <span className="ml-1 text-xs">
+                          ({language === 'tr' ? 
+                            (incomeFilters.paymentMethod === 'nakit' ? 'Nakit' : 
+                             incomeFilters.paymentMethod === 'banka' ? 'Banka' : 
+                             incomeFilters.paymentMethod === 'kart' ? 'Kredi Kartı' : '') : 
+                            (incomeFilters.paymentMethod === 'nakit' ? 'Cash' : 
+                             incomeFilters.paymentMethod === 'banka' ? 'Bank' : 
+                             incomeFilters.paymentMethod === 'kart' ? 'Credit Card' : '')})
+                        </span>
+                      )}
                     </p>
                     <div className="w-7 h-7 bg-[#0071e3]/10 dark:bg-[#0071e3]/20 rounded-lg flex items-center justify-center">
                       <ArrowTrendingUpIcon className="w-4 h-4 text-[#0071e3]" />
@@ -1352,12 +1433,18 @@ export default function IncomeExpense() {
                   </div>
                   <div className="flex items-end gap-1">
                     <h3 className="text-2xl font-semibold text-[#1d1d1f] dark:text-white">
-                      {isLoading ? '...' : formatCurrency(summaryData.monthlyIncome)}
+                      {isLoading ? '...' : 
+                        // Filtre varsa filtrelenmiş geliri göster, yoksa tüm geliri göster
+                        formatCurrency(incomeFilters.paymentMethod ? 
+                          filteredSummaryData.filteredIncome : 
+                          summaryData.monthlyIncome)
+                      }
                     </h3>
                   </div>
                 </div>
               </div>
 
+              {/* Diğer kartlar aynı kalıyor */}
               {/* Aylık Gider */}
               <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden group hover:border-[#0071e3] dark:hover:border-[#0071e3] hover:shadow-lg dark:hover:shadow-[#0071e3]/10 transition-all duration-200">
                 <div className="h-1 w-full bg-[#ef4444]" />
@@ -1399,7 +1486,13 @@ export default function IncomeExpense() {
               </div>
 
               {/* Bekleyen Tahsilatlar */}
-              <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden group hover:border-[#0071e3] dark:hover:border-[#0071e3] hover:shadow-lg dark:hover:shadow-[#0071e3]/10 transition-all duration-200">
+              <div 
+                onClick={() => {
+                  setIncomeFilters(prev => ({ ...prev, paymentStatus: 'beklemede' }));
+                  fetchIncomeTableData();
+                }}
+                className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden group hover:border-[#0071e3] dark:hover:border-[#0071e3] hover:shadow-lg dark:hover:shadow-[#0071e3]/10 transition-all duration-200 cursor-pointer"
+              >
                 <div className="h-1 w-full bg-[#fbbf24]" />
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-4">
@@ -1459,7 +1552,11 @@ export default function IncomeExpense() {
                     title={language === 'tr' ? 'Filtre' : 'Filter'}
                   >
                     <AdjustmentsHorizontalIcon className="w-5 h-5 text-[#424245] dark:text-[#86868b]" />
-                    {(incomeFilters.paymentMethod || incomeFilters.dateRange || incomeFilters.paymentStatus || incomeFilters.activeStatus) && (
+                    {(incomeFilters.paymentMethod || 
+                      incomeFilters.paymentStatus || 
+                      incomeFilters.activeStatus || 
+                      incomeFilters.search || 
+                      (incomeFilters.dateRange && incomeFilters.dateRange.length > 0)) && (
                       <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#0071e3] rounded-full ring-2 ring-white dark:ring-[#121621] " />
                     )}
                   </button>
@@ -1662,7 +1759,9 @@ export default function IncomeExpense() {
                       className="h-9 w-full sm:w-9 flex items-center justify-center rounded-xl border border-[#d2d2d7] dark:border-[#2a3241] hover:border-[#0071e3] dark:hover:border-[#0071e3] transition-colors relative group"
                     >
                       <AdjustmentsHorizontalIcon className="w-5 h-5 text-[#424245] dark:text-[#86868b]" />
-                      {(expenseFilters.expenseType || expenseFilters.paymentMethod || expenseFilters.dateRange) && (
+                      {(expenseFilters.expenseType || 
+                        expenseFilters.paymentMethod || 
+                        (expenseFilters.dateRange && expenseFilters.dateRange.length > 0)) && (
                         <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#0071e3] rounded-full ring-2 ring-white dark:ring-[#121621] " />
                       )}
                     </button>
