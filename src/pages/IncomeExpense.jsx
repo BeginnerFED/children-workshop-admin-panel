@@ -380,7 +380,8 @@ export default function IncomeExpense() {
   // Filtrelenmiş gelir toplam datası için yeni state ekliyorum
   const [filteredSummaryData, setFilteredSummaryData] = useState({
     filteredIncome: 0,
-    filteredExpense: 0
+    filteredExpense: 0,
+    filteredNetIncome: 0
   })
 
   // Grafik verisi için state
@@ -892,7 +893,10 @@ export default function IncomeExpense() {
       if (filteredSummaryData.filteredIncome !== filteredIncome) {
         setFilteredSummaryData(prev => ({
           ...prev,
-          filteredIncome: filteredIncome
+          filteredIncome: filteredIncome,
+          // Net gelir hesaplaması - eğer gider filtresi varsa onu, yoksa toplam gideri kullan
+          filteredNetIncome: filteredIncome - (expenseFilters.expenseType || expenseFilters.paymentMethod ? 
+            prev.filteredExpense : summaryData.monthlyExpense)
         }));
       }
     } else if (filterType === 'expense') {
@@ -901,7 +905,10 @@ export default function IncomeExpense() {
       if (filteredSummaryData.filteredExpense !== filteredExpense) {
         setFilteredSummaryData(prev => ({
           ...prev,
-          filteredExpense: filteredExpense
+          filteredExpense: filteredExpense,
+          // Net gelir hesaplaması - eğer gelir filtresi varsa onu, yoksa toplam geliri kullan
+          filteredNetIncome: (incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
+            prev.filteredIncome : summaryData.monthlyIncome) - filteredExpense
         }));
       }
     }
@@ -938,10 +945,32 @@ export default function IncomeExpense() {
       const filteredIncome = filtered.reduce((total, item) => total + item.amount, 0);
       setFilteredSummaryData(prev => ({
         ...prev,
-        filteredIncome: filteredIncome
+        filteredIncome: filteredIncome,
+        filteredNetIncome: filteredIncome - (expenseFilters.expenseType || expenseFilters.paymentMethod ? 
+          prev.filteredExpense : summaryData.monthlyExpense)
       }));
     }
   }, [isTableLoading, incomeFilters.paymentMethod, incomeTableData]);
+
+  // Gider filtreleri için yeni useEffect
+  useEffect(() => {
+    if (!isTableLoading && expenseTableData.length > 0) {
+      const filtered = expenseTableData.filter(item => {
+        const methodMatch = !expenseFilters.paymentMethod || item.method.toLowerCase() === expenseFilters.paymentMethod;
+        const categoryMatch = !expenseFilters.expenseType || item.category.toLowerCase() === expenseFilters.expenseType;
+        
+        return methodMatch && categoryMatch;
+      });
+      
+      const filteredExpense = filtered.reduce((total, item) => total + item.amount, 0);
+      setFilteredSummaryData(prev => ({
+        ...prev,
+        filteredExpense: filteredExpense,
+        filteredNetIncome: (incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
+          prev.filteredIncome : summaryData.monthlyIncome) - filteredExpense
+      }));
+    }
+  }, [isTableLoading, expenseFilters.paymentMethod, expenseFilters.expenseType, expenseTableData]);
 
   // Para formatı
   const formatCurrency = (amount) => {
@@ -1435,7 +1464,7 @@ export default function IncomeExpense() {
                     <h3 className="text-2xl font-semibold text-[#1d1d1f] dark:text-white">
                       {isLoading ? '...' : 
                         // Filtre varsa filtrelenmiş geliri göster, yoksa tüm geliri göster
-                        formatCurrency(incomeFilters.paymentMethod ? 
+                        formatCurrency(incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
                           filteredSummaryData.filteredIncome : 
                           summaryData.monthlyIncome)
                       }
@@ -1444,14 +1473,39 @@ export default function IncomeExpense() {
                 </div>
               </div>
 
-              {/* Diğer kartlar aynı kalıyor */}
-              {/* Aylık Gider */}
+              {/* Aylık Gider - Artık filtrelenebilir */}
               <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden group hover:border-[#0071e3] dark:hover:border-[#0071e3] hover:shadow-lg dark:hover:shadow-[#0071e3]/10 transition-all duration-200">
                 <div className="h-1 w-full bg-[#ef4444]" />
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[#6e6e73] dark:text-[#86868b] text-sm font-medium">
                       {language === 'tr' ? 'Gider' : 'Expense'}
+                      {expenseFilters.paymentMethod && (
+                        <span className="ml-1 text-xs">
+                          ({language === 'tr' ? 
+                            (expenseFilters.paymentMethod === 'nakit' ? 'Nakit' : 
+                             expenseFilters.paymentMethod === 'banka' ? 'Banka' : 
+                             expenseFilters.paymentMethod === 'kart' ? 'Kredi Kartı' : '') : 
+                            (expenseFilters.paymentMethod === 'nakit' ? 'Cash' : 
+                             expenseFilters.paymentMethod === 'banka' ? 'Bank' : 
+                             expenseFilters.paymentMethod === 'kart' ? 'Credit Card' : '')})
+                        </span>
+                      )}
+                      {expenseFilters.expenseType && (
+                        <span className="ml-1 text-xs">
+                          ({language === 'tr' 
+                            ? expenseFilters.expenseType.charAt(0).toUpperCase() + expenseFilters.expenseType.slice(1)
+                            : expenseFilters.expenseType === 'kira' ? 'Rent'
+                            : expenseFilters.expenseType === 'elektrik' ? 'Electricity'
+                            : expenseFilters.expenseType === 'su' ? 'Water'
+                            : expenseFilters.expenseType === 'dogalgaz' ? 'Natural Gas'
+                            : expenseFilters.expenseType === 'internet' ? 'Internet'
+                            : expenseFilters.expenseType === 'maas' ? 'Salary'
+                            : expenseFilters.expenseType === 'malzeme' ? 'Materials'
+                            : expenseFilters.expenseType === 'mutfak' ? 'Kitchen'
+                            : 'Other'})
+                        </span>
+                      )}
                     </p>
                     <div className="w-7 h-7 bg-[#ef4444]/10 dark:bg-[#ef4444]/20 rounded-lg flex items-center justify-center">
                       <ArrowTrendingDownIcon className="w-4 h-4 text-[#ef4444]" />
@@ -1459,19 +1513,25 @@ export default function IncomeExpense() {
                   </div>
                   <div className="flex items-end gap-1">
                     <h3 className="text-2xl font-semibold text-[#1d1d1f] dark:text-white">
-                      {isLoading ? '...' : formatCurrency(summaryData.monthlyExpense)}
+                      {isLoading ? '...' : formatCurrency(expenseFilters.expenseType || expenseFilters.paymentMethod ? 
+                        filteredSummaryData.filteredExpense : summaryData.monthlyExpense)}
                     </h3>
                   </div>
                 </div>
               </div>
 
-              {/* Net Kazanç */}
+              {/* Net Kazanç - Artık filtrelere göre hesaplanıyor */}
               <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden group hover:border-[#0071e3] dark:hover:border-[#0071e3] hover:shadow-lg dark:hover:shadow-[#0071e3]/10 transition-all duration-200">
                 <div className="h-1 w-full bg-[#34d399]" />
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[#6e6e73] dark:text-[#86868b] text-sm font-medium">
                       {language === 'tr' ? 'Net Kazanç' : 'Net Income'}
+                      {(incomeFilters.paymentMethod || expenseFilters.paymentMethod || expenseFilters.expenseType) && (
+                        <span className="ml-1 text-xs">
+                          ({language === 'tr' ? 'Filtrelenmiş' : 'Filtered'})
+                        </span>
+                      )}
                     </p>
                     <div className="w-7 h-7 bg-[#34d399]/10 dark:bg-[#34d399]/20 rounded-lg flex items-center justify-center">
                       <ScaleIcon className="w-4 h-4 text-[#34d399]" />
@@ -1479,7 +1539,12 @@ export default function IncomeExpense() {
                   </div>
                   <div className="flex items-end gap-1">
                     <h3 className="text-2xl font-semibold text-[#1d1d1f] dark:text-white">
-                      {isLoading ? '...' : formatCurrency(summaryData.netIncome)}
+                      {isLoading ? '...' : formatCurrency(
+                        (incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus || 
+                         expenseFilters.paymentMethod || expenseFilters.expenseType) 
+                          ? filteredSummaryData.filteredNetIncome 
+                          : summaryData.netIncome
+                      )}
                     </h3>
                   </div>
                 </div>
