@@ -543,7 +543,7 @@ const Home = () => {
                   <div className="mt-4">
                     <h4 className="text-[13px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-1.5 mb-3">
                       <FiUsers className="w-4 h-4 text-[#0071e3]" />
-                      {language === 'en' ? 'Participants' : 'Katılımcılar'} ({event.participants.filter(p => p.status === 'scheduled' || p.status === 'makeup' || p.status === 'attended').length}/{event.participants.length})
+                      {language === 'en' ? 'Participants' : 'Katılımcılar'}
                     </h4>
 
                     {event.participants.length === 0 ? (
@@ -752,7 +752,7 @@ HelloKido Oyun Atölyesi 🌸`)}`}
                   <div className="mt-4">
                     <h4 className="text-[13px] font-medium text-[#1d1d1f] dark:text-white flex items-center gap-1.5 mb-3">
                       <FiUsers className="w-4 h-4 text-[#ff9500]" />
-                      {language === 'en' ? 'Participants' : 'Katılımcılar'} ({event.participants.filter(p => p.status === 'scheduled' || p.status === 'makeup' || p.status === 'attended').length}/{event.participants.length})
+                      {language === 'en' ? 'Participants' : 'Katılımcılar'}
                     </h4>
 
                     {event.participants.length === 0 ? (
