@@ -84,9 +84,9 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const inputClasses = "w-full h-[50px] pl-11 pr-4 py-3 rounded-xl border border-[#d2d2d7] dark:border-[#2a3241] bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white focus:ring-2 focus:ring-[#0071e3] focus:border-transparent transition-all"
-  const iconClasses = "w-5 h-5 text-[#86868b]"
-  const iconWrapperClasses = "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+  const iconClasses = "w-5 h-5 text-[#86868b] pointer-events-none flex-shrink-0"
+  const iconWrapperClasses = "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10"
+  const inputClasses = "w-full h-[50px] pl-11 pr-4 py-3 rounded-xl border border-[#d2d2d7] dark:border-[#2a3241] bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white focus:ring-2 focus:ring-[#0071e3] focus:border-transparent transition-all appearance-none"
 
   // Tarihi formatlama fonksiyonu
   const formatDate = (date) => {
@@ -235,6 +235,64 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
         isVisible={toast.visible}
         onClose={() => setToast(prev => ({ ...prev, visible: false }))}
       />
+      <style jsx>{`
+        /* Cross-browser compatibility for select elements */
+        select {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2386868B' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+          background-position: right 0.75rem center;
+          background-repeat: no-repeat;
+          background-size: 1.25em;
+          padding-right: 2.5rem;
+        }
+        
+        /* Fix icon positioning for Safari */
+        .icon-wrapper {
+          -webkit-transform: translateY(-50%);
+          transform: translateY(-50%);
+        }
+        
+        /* Fix dropdown for mobile */
+        @media (max-width: 768px) {
+          select {
+            padding-right: 2.5rem;
+            text-overflow: ellipsis;
+          }
+          
+          /* iOS specific fixes */
+          input, select {
+            font-size: 16px; /* Prevents iOS zoom on focus */
+          }
+        }
+        
+        /* Normalize form controls across browsers */
+        input, select, button {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+        }
+        
+        /* Safari specific fixes */
+        @supports (-webkit-touch-callout: none) {
+          input, select {
+            border-radius: 11px;
+          }
+          
+          /* Fix for iOS date inputs */
+          input[type="text"] {
+            line-height: normal;
+          }
+        }
+        
+        /* SVG icon fixes for cross-browser compatibility */
+        svg {
+          display: inline-block;
+          vertical-align: middle;
+          overflow: visible;
+        }
+      `}</style>
       <div className={`fixed inset-0 z-50 overflow-y-auto ${!isOpen ? 'hidden' : ''}`}>
         {/* Overlay */}
         <div 
