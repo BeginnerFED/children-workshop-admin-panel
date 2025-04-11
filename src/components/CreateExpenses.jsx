@@ -220,7 +220,7 @@ export default function CreateExpenses({ isOpen, onClose, onSuccess }) {
 
   const inputClasses = "w-full h-[50px] pl-11 pr-4 py-3 rounded-xl border border-[#d2d2d7] dark:border-[#2a3241] bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white focus:ring-2 focus:ring-[#0071e3] focus:border-transparent transition-all appearance-none"
   const iconClasses = "w-5 h-5 text-[#86868b] pointer-events-none flex-shrink-0"
-  const iconWrapperClasses = "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10"
+  const iconWrapperClasses = "absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
 
   // DatePicker özel stil
   const CustomInput = React.forwardRef(({ value, onClick }, ref) => (

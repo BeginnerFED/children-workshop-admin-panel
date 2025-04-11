@@ -464,7 +464,9 @@ export default function IncomeExpense() {
     try {
       // Seçili tarih aralığını kullan
       const startDate = dateRange[0]
-      const endDate = dateRange[1]
+      // Bitiş tarihini günün sonuna ayarla (23:59:59.999)
+      const endDate = new Date(dateRange[1])
+      endDate.setHours(23, 59, 59, 999)
 
       // 1. Bu ayki gelirleri getir (financial_records tablosundan)
       const { data: incomeData, error: incomeError } = await supabase
@@ -735,10 +737,14 @@ export default function IncomeExpense() {
         const packageStartDate = new Date(record.date);
         const packageEndDate = new Date(record.end_date || record.date);
         
+        // Bitiş tarihini günün sonuna ayarla (23:59:59.999)
+        const endDateAdjusted = new Date(dateRange[1]);
+        endDateAdjusted.setHours(23, 59, 59, 999);
+        
         return (
-          (packageStartDate >= dateRange[0] && packageStartDate <= dateRange[1]) || // Başlangıç tarihi aralıkta
-          (packageEndDate >= dateRange[0] && packageEndDate <= dateRange[1]) || // Bitiş tarihi aralıkta
-          (packageStartDate <= dateRange[0] && packageEndDate >= dateRange[1]) // Paket tüm aralığı kapsıyor
+          (packageStartDate >= dateRange[0] && packageStartDate <= endDateAdjusted) || // Başlangıç tarihi aralıkta
+          (packageEndDate >= dateRange[0] && packageEndDate <= endDateAdjusted) || // Bitiş tarihi aralıkta
+          (packageStartDate <= dateRange[0] && packageEndDate >= endDateAdjusted) // Paket tüm aralığı kapsıyor
         );
       });
 
@@ -757,11 +763,15 @@ export default function IncomeExpense() {
   // Gider tablosu verilerini getir
   const fetchExpenseTableData = async () => {
     try {
+      // Bitiş tarihini günün sonuna ayarla (23:59:59.999)
+      const endDateAdjusted = new Date(dateRange[1]);
+      endDateAdjusted.setHours(23, 59, 59, 999);
+      
       const { data, error } = await supabase
         .from('expenses')
         .select('*')
         .gte('expense_date', dateRange[0].toISOString())
-        .lte('expense_date', dateRange[1].toISOString())
+        .lte('expense_date', endDateAdjusted.toISOString())
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -785,11 +795,15 @@ export default function IncomeExpense() {
   // Gider dağılımı verilerini getir
   const fetchExpenseDistribution = async () => {
     try {
+      // Bitiş tarihini günün sonuna ayarla (23:59:59.999)
+      const endDateAdjusted = new Date(dateRange[1]);
+      endDateAdjusted.setHours(23, 59, 59, 999);
+      
       const { data, error } = await supabase
         .from('expenses')
         .select('expense_type, amount')
         .gte('expense_date', dateRange[0].toISOString())
-        .lte('expense_date', dateRange[1].toISOString())
+        .lte('expense_date', endDateAdjusted.toISOString())
 
       if (error) throw error
 

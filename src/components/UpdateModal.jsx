@@ -149,6 +149,17 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
           amount: ''
         }
       }
+      
+      // Eğer ödeme durumu "odendi" olarak değiştirilirse, ödeme yöntemini sıfırla
+      // Bu kullanıcıyı açıkça bir ödeme yöntemi seçmeye zorlar
+      if (name === 'paymentStatus' && value === 'odendi') {
+        return {
+          ...prev,
+          [name]: value,
+          paymentMethod: '' // Dropdown'ı sıfırla, kullanıcıyı seçim yapmaya zorla
+        }
+      }
+      
       return {
         ...prev,
         [name]: value
