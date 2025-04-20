@@ -309,19 +309,39 @@ const Home = () => {
     try {
       setUpdatingLessonId(lessonId);
       
+      // Optimistik UI güncellemesi - API çağrısından önce UI'ı güncelle
+      // Bu sayede sayfa yeniden yüklenmeyecek ve kullanıcı aynı yerde kalacak
+      setTodayEvents(prevEvents => {
+        return prevEvents.map(event => {
+          // Etkinliğin katılımcıları arasında güncellenen katılımcıyı bul
+          const updatedParticipants = event.participants.map(participant => {
+            if (participant.id === lessonId) {
+              // Sadece ilgili katılımcının durumunu güncelle
+              return { ...participant, status: newStatus };
+            }
+            return participant;
+          });
+          
+          // Etkinliği güncellenen katılımcılarla birlikte döndür
+          return { ...event, participants: updatedParticipants };
+        });
+      });
+      
+      // Optimistik güncelleme sonrası, backend'i güncelle
       const { error } = await supabase
         .from('event_participants')
         .update({ status: newStatus })
         .eq('id', lessonId);
       
-      if (error) throw error;
-      
-      // Başarılı güncelleme sonrası sadece bugünkü dersler verilerini yenile
-      // Yarınki dersleri skeleton loading'e sokmamak için sadece bugünkü dersleri yeniliyoruz
-      fetchTodayEvents();
+      if (error) {
+        // Hata durumunda, eski verileri geri getirmek için fetchTodayEvents() çağrılabilir
+        console.error('Ders statüsü güncellenirken hata oluştu:', error);
+        fetchTodayEvents(); // Sadece hata durumunda yeniden verileri çek
+      }
       
     } catch (error) {
       console.error('Ders statüsü güncellenirken hata oluştu:', error);
+      fetchTodayEvents(); // Sadece hata durumunda yeniden verileri çek
     } finally {
       setUpdatingLessonId(null);
     }

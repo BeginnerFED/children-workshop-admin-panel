@@ -397,8 +397,8 @@ export default function IncomeExpense() {
 
   // Filtreler için state
   const [incomeFilters, setIncomeFilters] = useState({
-    paymentMethod: '',
-    dateRange: [],  // null yerine boş dizi kullanıyoruz
+    paymentMethod: [],  // String yerine artık array yapısında
+    dateRange: [],  
     paymentStatus: '',
     activeStatus: '',
     search: ''
@@ -475,6 +475,7 @@ export default function IncomeExpense() {
           amount,
           payment_status,
           transaction_type,
+          payment_date,
           registrations (
             package_start_date,
             package_end_date
@@ -485,20 +486,10 @@ export default function IncomeExpense() {
 
       if (incomeError) throw incomeError
 
-      // Filter the income data by package_start_date
+      // Ödeme tarihine göre filtreleme yapıyoruz
       const filteredIncomeData = incomeData.filter(record => {
-        const packageStartDate = new Date(record.registrations.package_start_date);
-        const packageEndDate = new Date(record.registrations.package_end_date || record.registrations.package_start_date);
-        
-        // Paket şu üç durumdan birinde filtrelemeye uyar:
-        // 1. Başlangıç tarihi filtrelenen aralıkta
-        // 2. Bitiş tarihi filtrelenen aralıkta 
-        // 3. Paket tüm filtrelenen aralığı kapsıyor
-        return (
-          (packageStartDate >= startDate && packageStartDate <= endDate) || // Başlangıç tarihi aralıkta
-          (packageEndDate >= startDate && packageEndDate <= endDate) || // Bitiş tarihi aralıkta
-          (packageStartDate <= startDate && packageEndDate >= endDate) // Paket tüm aralığı kapsıyor
-        );
+        const paymentDate = new Date(record.payment_date || record.created_at);
+        return paymentDate >= startDate && paymentDate <= endDate;
       });
 
       // 2. Bu ayki giderleri getir
@@ -516,6 +507,7 @@ export default function IncomeExpense() {
         .select(`
           id,
           payment_status,
+          payment_date,
           registrations (
             package_start_date,
             package_end_date
@@ -525,28 +517,18 @@ export default function IncomeExpense() {
 
       if (pendingError) throw pendingError
 
-      // Filter the pending data by package_start_date
+      // Bekleyen ödemeleri de ödeme tarihine göre filtreliyoruz
       const filteredPendingData = pendingData.filter(record => {
-        const packageStartDate = new Date(record.registrations.package_start_date);
-        const packageEndDate = new Date(record.registrations.package_end_date || record.registrations.package_start_date);
+        // Eğer payment_date yoksa, tahsilat tarihi henüz belirlenmemiş demektir,
+        // bu durumda bunu gelecekte tahsil edilecek ödeme olarak kabul edelim ve gösterelim
+        if (!record.payment_date) return true;
         
-        // Paket şu üç durumdan birinde filtrelemeye uyar:
-        // 1. Başlangıç tarihi filtrelenen aralıkta
-        // 2. Bitiş tarihi filtrelenen aralıkta 
-        // 3. Paket tüm filtrelenen aralığı kapsıyor
-        return (
-          (packageStartDate >= startDate && packageStartDate <= endDate) || // Başlangıç tarihi aralıkta
-          (packageEndDate >= startDate && packageEndDate <= endDate) || // Bitiş tarihi aralıkta
-          (packageStartDate <= startDate && packageEndDate >= endDate) // Paket tüm aralığı kapsıyor
-        );
+        const paymentDate = new Date(record.payment_date);
+        return paymentDate >= startDate && paymentDate <= endDate;
       });
 
       // Toplamları hesapla
-      const monthlyIncome = filteredIncomeData.reduce((sum, record) => {
-        // Paket seçilen tarih aralığında aktifse, tüm tutarı göster
-        return sum + record.amount;
-      }, 0);
-      
+      const monthlyIncome = filteredIncomeData.reduce((sum, record) => sum + record.amount, 0);
       const monthlyExpense = expenseData.reduce((sum, record) => sum + record.amount, 0)
       const netIncome = monthlyIncome - monthlyExpense
       const pendingCount = filteredPendingData.length
@@ -559,80 +541,14 @@ export default function IncomeExpense() {
         pendingCount
       })
 
-      // Son seçilen ay sayısının verilerini getir
-      const selectedMonthsAgo = new Date()
-      selectedMonthsAgo.setMonth(selectedMonthsAgo.getMonth() - (chartRange - 1))
-
-      // Gelirler - hem ilk kayıt hem uzatma işlemlerini dahil edelim
-      const { data: monthlyIncomeData, error: monthlyIncomeError } = await supabase
-        .from('financial_records')
-        .select(`
-          amount, 
-          created_at,
-          transaction_type,
-          registrations (
-            package_start_date
-          )
-        `)
-        .in('transaction_type', ['initial_payment', 'extension_payment'])
-        .eq('payment_status', 'odendi')
-        .gte('created_at', selectedMonthsAgo.toISOString())
-        .order('created_at', { ascending: true })
-
-      if (monthlyIncomeError) throw monthlyIncomeError
-
-      // Giderler
-      const { data: monthlyExpenseData, error: monthlyExpenseError } = await supabase
-        .from('expenses')
-        .select('amount, expense_date')
-        .gte('expense_date', selectedMonthsAgo.toISOString())
-        .order('expense_date', { ascending: true })
-
-      if (monthlyExpenseError) throw monthlyExpenseError
-
-      // Grafik verilerini hazırla
-      const monthlyData = {}
-      const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
-
-      // Son seçilen ay sayısını döngüye al
-      for (let i = 0; i < chartRange; i++) {
-        const date = new Date()
-        date.setMonth(date.getMonth() - i)
-        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`
-        const monthName = months[date.getMonth()]
-        
-        monthlyData[monthKey] = {
-          name: monthName,
-          gelir: 0,
-          gider: 0
-        }
-      }
-
-      // Gelirleri ekle
-      monthlyIncomeData.forEach(record => {
-        // Paketin başlangıç tarihine göre grupla
-        const date = new Date(record.registrations.package_start_date);
-        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-        
-        if (monthlyData[monthKey]) {
-          monthlyData[monthKey].gelir += record.amount;
-        }
-      });
-
-      // Giderleri ekle
-      monthlyExpenseData.forEach(record => {
-        const date = new Date(record.expense_date)
-        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`
-        if (monthlyData[monthKey]) {
-          monthlyData[monthKey].gider += record.amount
-        }
+      // Filtrelenmiş veri için varsayılan değerleri ayarla
+      setFilteredSummaryData({
+        filteredIncome: monthlyIncome,
+        filteredExpense: monthlyExpense,
+        filteredNetIncome: netIncome
       })
-
-      // Grafik verilerini state'e aktar
-      setChartData(Object.values(monthlyData).reverse())
-
     } catch (error) {
-      console.error('Veriler getirilirken hata:', error.message)
+      console.error('Özet verileri getirilirken hata:', error.message)
     } finally {
       setIsLoading(false)
     }
@@ -653,6 +569,7 @@ export default function IncomeExpense() {
           created_at,
           transaction_type,
           registration_id,
+          payment_date,
           notes,
           registrations (
             student_name,
@@ -684,30 +601,40 @@ export default function IncomeExpense() {
         let displayStartDate, displayEndDate, displayPackageType;
 
         if (record.transaction_type === 'initial_payment') {
-          // İlk kayıt için kaydedilen ilk tarihleri kullan
+          // İlk kayıt için kaydedilen ilk tarihleri kullan (UpdateModal sonrası doğru olmalı)
           displayStartDate = record.registrations.initial_start_date || record.registrations.package_start_date;
           displayEndDate = record.registrations.initial_end_date || record.registrations.package_end_date; 
           displayPackageType = record.registrations.initial_package_type || record.registrations.package_type;
-        } else {
+        } else { // extension_payment
           // Uzatma işlemi için extension_history tablosundan ilgili uzatma kaydını bul
-          // Uzatma işlemleri için created_at tarihine en yakın extension_history kaydını bul
-          const extensionRecord = extensionData
+          // Daha güvenilir eşleştirme: registration_id eşleşen ve ödeme bilgileri/paket tipi uyan EN SON kaydı bulmayı deneyelim.
+          // Not: Bu hala %100 garantili değil. İdeal olan extension_id eklemek olurdu.
+          const potentialMatches = extensionData
             .filter(ext => ext.registration_id === record.registration_id)
-            .find(ext => {
-              // Yaklaşık olarak aynı zamanda oluşturulmuş olanları bul (5 dakika içinde)
-              const recordDate = new Date(record.created_at);
-              const extDate = new Date(ext.created_at);
-              const diffMinutes = Math.abs(recordDate - extDate) / (1000 * 60);
-              return diffMinutes < 5;
-            });
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // En son ekleneni başa al
 
-          if (extensionRecord) {
-            // Uzatma kaydı bulunduysa onun tarih bilgilerini kullan
-            displayStartDate = extensionRecord.previous_end_date;
+          const extensionRecord = potentialMatches.find(ext => 
+            // Ödeme detayları (varsa) ve paket tipi gibi bilgilerle eşleştirmeyi dene
+            // Ödeme beklemede durumunu da hesaba kat
+            (record.payment_status === 'beklemede' || 
+             (ext.payment_amount === record.amount &&
+              ext.payment_method === record.payment_method &&
+              // payment_date karşılaştırması ms farklarından dolayı riskli olabilir, yakınlık kontrolü daha iyi
+              (!record.payment_date || !ext.payment_date || Math.abs(new Date(record.payment_date) - new Date(ext.payment_date)) < 60000) // 1 dakika tolerans
+             )
+            ) &&
+            ext.new_package_type === record.registrations.package_type // Finansal kayıttaki anlık paket tipiyle eşleşmeli
+          );
+
+          if (extensionRecord && extensionRecord.new_start_date) {
+            // Uzatma kaydı bulunduysa ve new_start_date varsa onu kullan
+            displayStartDate = extensionRecord.new_start_date; // *** Düzeltildi: new_start_date kullanılıyor ***
             displayEndDate = extensionRecord.new_end_date;
             displayPackageType = extensionRecord.new_package_type;
           } else {
-            // Bulunamadıysa mevcut tarih bilgilerini kullan
+            // Güvenilir bir eşleşme bulunamadıysa veya new_start_date yoksa,
+            // en iyi tahmin olarak mevcut paket tarihlerini kullan (bu durum ideal değil)
+            console.warn(`Extension history eşleşmesi bulunamadı veya new_start_date eksik: financial_record.id=${record.id}, registration_id=${record.registration_id}`);
             displayStartDate = record.registrations.package_start_date;
             displayEndDate = record.registrations.package_end_date;
             displayPackageType = record.registrations.package_type;
@@ -725,6 +652,7 @@ export default function IncomeExpense() {
           amount: record.amount,
           method: record.payment_method,
           status: record.payment_status,
+          payment_date: record.payment_date || record.created_at, // Ödeme tarihi, yoksa created_at kullanılır
           transaction_type: record.transaction_type === 'initial_payment' 
             ? (language === 'tr' ? 'İlk Kayıt' : 'Initial Registration')
             : (language === 'tr' ? 'Paket Uzatma' : 'Package Extension'),
@@ -732,20 +660,16 @@ export default function IncomeExpense() {
         };
       }));
 
-      // 4. Tarihe göre filtreleme yap
+      // 4. Tarihe göre filtreleme yap - Artık ödeme tarihine göre filtreleme yapıyoruz
       const filteredData = formattedData.filter(record => {
-        const packageStartDate = new Date(record.date);
-        const packageEndDate = new Date(record.end_date || record.date);
+        const paymentDate = new Date(record.payment_date);
         
         // Bitiş tarihini günün sonuna ayarla (23:59:59.999)
         const endDateAdjusted = new Date(dateRange[1]);
         endDateAdjusted.setHours(23, 59, 59, 999);
         
-        return (
-          (packageStartDate >= dateRange[0] && packageStartDate <= endDateAdjusted) || // Başlangıç tarihi aralıkta
-          (packageEndDate >= dateRange[0] && packageEndDate <= endDateAdjusted) || // Bitiş tarihi aralıkta
-          (packageStartDate <= dateRange[0] && packageEndDate >= endDateAdjusted) // Paket tüm aralığı kapsıyor
-        );
+        // Ödeme tarihi belirtilen aralıkta mı kontrol et
+        return paymentDate >= dateRange[0] && paymentDate <= endDateAdjusted;
       });
 
       // 5. Varsayılan olarak sadece "odendi" durumundaki kayıtları gösterelim
@@ -842,13 +766,82 @@ export default function IncomeExpense() {
   const fetchAllData = async () => {
     setIsLoading(true)
     setIsTableLoading(true)
+    
     try {
-      await Promise.all([
-        fetchSummaryData(),
-        fetchIncomeTableData(),
-        fetchExpenseTableData(),
-        fetchExpenseDistribution()
-      ])
+      await fetchSummaryData()
+      await fetchIncomeTableData()
+      await fetchExpenseTableData()
+      await fetchExpenseDistribution()
+      
+      // Son seçilen ay sayısının verilerini getir
+      const selectedMonthsAgo = new Date()
+      selectedMonthsAgo.setMonth(selectedMonthsAgo.getMonth() - (chartRange - 1))
+
+      // Gelirler - hem ilk kayıt hem uzatma işlemlerini dahil edelim
+      const { data: monthlyIncomeData, error: monthlyIncomeError } = await supabase
+        .from('financial_records')
+        .select(`
+          amount, 
+          created_at,
+          payment_date,
+          transaction_type
+        `)
+        .in('transaction_type', ['initial_payment', 'extension_payment'])
+        .eq('payment_status', 'odendi')
+        .gte('created_at', selectedMonthsAgo.toISOString())
+        .order('created_at', { ascending: true })
+
+      if (monthlyIncomeError) throw monthlyIncomeError
+
+      // Giderler
+      const { data: monthlyExpenseData, error: monthlyExpenseError } = await supabase
+        .from('expenses')
+        .select('amount, expense_date')
+        .gte('expense_date', selectedMonthsAgo.toISOString())
+        .order('expense_date', { ascending: true })
+
+      if (monthlyExpenseError) throw monthlyExpenseError
+
+      // Grafik verilerini hazırla
+      const monthlyData = {}
+      const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
+
+      // Son seçilen ay sayısını döngüye al
+      for (let i = 0; i < chartRange; i++) {
+        const date = new Date()
+        date.setMonth(date.getMonth() - i)
+        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`
+        const monthName = months[date.getMonth()]
+        
+        monthlyData[monthKey] = {
+          name: monthName,
+          gelir: 0,
+          gider: 0
+        }
+      }
+
+      // Gelirleri ekle - artık ödeme tarihine göre grupluyoruz
+      monthlyIncomeData.forEach(record => {
+        // Ödeme tarihine göre grupla
+        const date = new Date(record.payment_date || record.created_at);
+        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+        
+        if (monthlyData[monthKey]) {
+          monthlyData[monthKey].gelir += record.amount;
+        }
+      });
+
+      // Giderleri ekle
+      monthlyExpenseData.forEach(record => {
+        const date = new Date(record.expense_date)
+        const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`
+        if (monthlyData[monthKey]) {
+          monthlyData[monthKey].gider += record.amount
+        }
+      })
+
+      // Grafik verilerini state'e aktar
+      setChartData(Object.values(monthlyData).reverse())
     } catch (error) {
       console.error('Veriler getirilirken hata:', error.message)
     } finally {
@@ -870,7 +863,15 @@ export default function IncomeExpense() {
                      item.parent.toLowerCase().includes(searchTerm);
       }
       
-      const methodMatch = !currentFilters.paymentMethod || item.method.toLowerCase() === currentFilters.paymentMethod;
+      // Ödeme yöntemi filtresini güncelliyoruz - çoklu seçim kontrolü
+      let methodMatch = true;
+      if (filterType === 'income') {
+        // Boş dizi değilse (hiçbir filtre seçilmediğinde) ve dizi uzunluğu > 0 ise filtre uygula
+        methodMatch = !currentFilters.paymentMethod.length || 
+                      currentFilters.paymentMethod.includes(item.method.toLowerCase());
+      } else {
+        methodMatch = !currentFilters.paymentMethod || item.method.toLowerCase() === currentFilters.paymentMethod;
+      }
       
       let statusMatch = true;
       if (filterType === 'income') {
@@ -921,7 +922,7 @@ export default function IncomeExpense() {
           ...prev,
           filteredExpense: filteredExpense,
           // Net gelir hesaplaması - eğer gelir filtresi varsa onu, yoksa toplam geliri kullan
-          filteredNetIncome: (incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
+          filteredNetIncome: (incomeFilters.paymentMethod.length || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
             prev.filteredIncome : summaryData.monthlyIncome) - filteredExpense
         }));
       }
@@ -953,7 +954,8 @@ export default function IncomeExpense() {
       // Çünkü applyFilters hem filtreleme yapıp hem de state güncellediği için
       // sonsuz döngüye neden olabilir
       const filtered = incomeTableData.filter(item => {
-        return !incomeFilters.paymentMethod || item.method.toLowerCase() === incomeFilters.paymentMethod;
+        return !incomeFilters.paymentMethod.length || 
+               incomeFilters.paymentMethod.includes(item.method.toLowerCase());
       });
       
       const filteredIncome = filtered.reduce((total, item) => total + item.amount, 0);
@@ -980,7 +982,7 @@ export default function IncomeExpense() {
       setFilteredSummaryData(prev => ({
         ...prev,
         filteredExpense: filteredExpense,
-        filteredNetIncome: (incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
+        filteredNetIncome: (incomeFilters.paymentMethod.length || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
           prev.filteredIncome : summaryData.monthlyIncome) - filteredExpense
       }));
     }
@@ -1195,10 +1197,20 @@ export default function IncomeExpense() {
               </h3>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setIncomeFilters(prev => ({ ...prev, paymentMethod: 'banka' }))}
+                  onClick={() => {
+                    setIncomeFilters(prev => {
+                      const newPaymentMethod = [...prev.paymentMethod];
+                      // Eğer zaten seçiliyse kaldır, değilse ekle (toggle)
+                      if (newPaymentMethod.includes('banka')) {
+                        return { ...prev, paymentMethod: newPaymentMethod.filter(m => m !== 'banka') };
+                      } else {
+                        return { ...prev, paymentMethod: [...newPaymentMethod, 'banka'] };
+                      }
+                    });
+                  }}
                   className={`
                     h-9 px-4 rounded-lg text-sm font-medium transition-colors flex-1 whitespace-nowrap
-                    ${incomeFilters.paymentMethod === 'banka'
+                    ${incomeFilters.paymentMethod.includes('banka')
                       ? 'bg-[#121621] dark:bg-[#0071e3] text-white'
                       : 'bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white border border-[#d2d2d7] dark:border-[#2a3241] hover:border-[#0071e3] dark:hover:border-[#0071e3]'
                     }
@@ -1207,10 +1219,20 @@ export default function IncomeExpense() {
                   {language === 'tr' ? 'Banka' : 'Bank'}
                 </button>
                 <button
-                  onClick={() => setIncomeFilters(prev => ({ ...prev, paymentMethod: 'nakit' }))}
+                  onClick={() => {
+                    setIncomeFilters(prev => {
+                      const newPaymentMethod = [...prev.paymentMethod];
+                      // Eğer zaten seçiliyse kaldır, değilse ekle (toggle)
+                      if (newPaymentMethod.includes('nakit')) {
+                        return { ...prev, paymentMethod: newPaymentMethod.filter(m => m !== 'nakit') };
+                      } else {
+                        return { ...prev, paymentMethod: [...newPaymentMethod, 'nakit'] };
+                      }
+                    });
+                  }}
                   className={`
                     h-9 px-4 rounded-lg text-sm font-medium transition-colors flex-1 whitespace-nowrap
-                    ${incomeFilters.paymentMethod === 'nakit'
+                    ${incomeFilters.paymentMethod.includes('nakit')
                       ? 'bg-[#121621] dark:bg-[#0071e3] text-white'
                       : 'bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white border border-[#d2d2d7] dark:border-[#2a3241] hover:border-[#0071e3] dark:hover:border-[#0071e3]'
                     }
@@ -1219,10 +1241,20 @@ export default function IncomeExpense() {
                   {language === 'tr' ? 'Nakit' : 'Cash'}
                 </button>
                 <button
-                  onClick={() => setIncomeFilters(prev => ({ ...prev, paymentMethod: 'kart' }))}
+                  onClick={() => {
+                    setIncomeFilters(prev => {
+                      const newPaymentMethod = [...prev.paymentMethod];
+                      // Eğer zaten seçiliyse kaldır, değilse ekle (toggle)
+                      if (newPaymentMethod.includes('kart')) {
+                        return { ...prev, paymentMethod: newPaymentMethod.filter(m => m !== 'kart') };
+                      } else {
+                        return { ...prev, paymentMethod: [...newPaymentMethod, 'kart'] };
+                      }
+                    });
+                  }}
                   className={`
                     h-9 px-4 rounded-lg text-sm font-medium transition-colors flex-1 whitespace-nowrap
-                    ${incomeFilters.paymentMethod === 'kart'
+                    ${incomeFilters.paymentMethod.includes('kart')
                       ? 'bg-[#121621] dark:bg-[#0071e3] text-white'
                       : 'bg-white dark:bg-[#121621] text-[#1d1d1f] dark:text-white border border-[#d2d2d7] dark:border-[#2a3241] hover:border-[#0071e3] dark:hover:border-[#0071e3]'
                     }
@@ -1272,10 +1304,10 @@ export default function IncomeExpense() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  // Filtreleri temizlerken dateRange'i [] olarak ayarlıyoruz, null değil
+                  // Filtreleri temizlerken paymentMethod'u [] olarak ayarlıyoruz
                   setIncomeFilters({
-                    paymentMethod: '',
-                    dateRange: [],  // null yerine boş dizi
+                    paymentMethod: [],  // Boş array olarak ayarla
+                    dateRange: [],
                     paymentStatus: '',
                     activeStatus: '',
                     search: ''
@@ -1451,22 +1483,26 @@ export default function IncomeExpense() {
             </>
           ) : (
             <>
-              {/* Aylık Gelir - Şimdi filtreye duyarlı */}
+              {/* Aylık Gelir - Filtreleme bilgisini çoklu seçime göre güncelliyoruz */}
               <div className="bg-white dark:bg-[#121621] rounded-2xl border border-[#d2d2d7] dark:border-[#2a3241] overflow-hidden group hover:border-[#0071e3] dark:hover:border-[#0071e3] hover:shadow-lg dark:hover:shadow-[#0071e3]/10 transition-all duration-200">
                 <div className="h-1 w-full bg-[#0071e3]" />
                 <div className="p-5">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[#6e6e73] dark:text-[#86868b] text-sm font-medium">
                       {language === 'tr' ? 'Gelir' : 'Income'}
-                      {incomeFilters.paymentMethod && (
+                      {incomeFilters.paymentMethod.length > 0 && (
                         <span className="ml-1 text-xs">
                           ({language === 'tr' ? 
-                            (incomeFilters.paymentMethod === 'nakit' ? 'Nakit' : 
-                             incomeFilters.paymentMethod === 'banka' ? 'Banka' : 
-                             incomeFilters.paymentMethod === 'kart' ? 'Kredi Kartı' : '') : 
-                            (incomeFilters.paymentMethod === 'nakit' ? 'Cash' : 
-                             incomeFilters.paymentMethod === 'banka' ? 'Bank' : 
-                             incomeFilters.paymentMethod === 'kart' ? 'Credit Card' : '')})
+                            (incomeFilters.paymentMethod.map(method => 
+                              method === 'nakit' ? 'Nakit' : 
+                              method === 'banka' ? 'Banka' : 
+                              method === 'kart' ? 'Kredi Kartı' : ''
+                            ).join(', ')) : 
+                            (incomeFilters.paymentMethod.map(method => 
+                              method === 'nakit' ? 'Cash' : 
+                              method === 'banka' ? 'Bank' : 
+                              method === 'kart' ? 'Credit Card' : ''
+                            ).join(', '))})
                         </span>
                       )}
                     </p>
@@ -1478,7 +1514,7 @@ export default function IncomeExpense() {
                     <h3 className="text-2xl font-semibold text-[#1d1d1f] dark:text-white">
                       {isLoading ? '...' : 
                         // Filtre varsa filtrelenmiş geliri göster, yoksa tüm geliri göster
-                        formatCurrency(incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
+                        formatCurrency(incomeFilters.paymentMethod.length || incomeFilters.paymentStatus || incomeFilters.activeStatus ? 
                           filteredSummaryData.filteredIncome : 
                           summaryData.monthlyIncome)
                       }
@@ -1541,7 +1577,7 @@ export default function IncomeExpense() {
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-[#6e6e73] dark:text-[#86868b] text-sm font-medium">
                       {language === 'tr' ? 'Net Kazanç' : 'Net Income'}
-                      {(incomeFilters.paymentMethod || expenseFilters.paymentMethod || expenseFilters.expenseType) && (
+                      {(incomeFilters.paymentMethod.length || expenseFilters.paymentMethod || expenseFilters.expenseType) && (
                         <span className="ml-1 text-xs">
                           ({language === 'tr' ? 'Filtrelenmiş' : 'Filtered'})
                         </span>
@@ -1554,7 +1590,7 @@ export default function IncomeExpense() {
                   <div className="flex items-end gap-1">
                     <h3 className="text-2xl font-semibold text-[#1d1d1f] dark:text-white">
                       {isLoading ? '...' : formatCurrency(
-                        (incomeFilters.paymentMethod || incomeFilters.paymentStatus || incomeFilters.activeStatus || 
+                        (incomeFilters.paymentMethod.length || incomeFilters.paymentStatus || incomeFilters.activeStatus || 
                          expenseFilters.paymentMethod || expenseFilters.expenseType) 
                           ? filteredSummaryData.filteredNetIncome 
                           : summaryData.netIncome
@@ -1631,7 +1667,7 @@ export default function IncomeExpense() {
                     title={language === 'tr' ? 'Filtre' : 'Filter'}
                   >
                     <AdjustmentsHorizontalIcon className="w-5 h-5 text-[#424245] dark:text-[#86868b]" />
-                    {(incomeFilters.paymentMethod || 
+                    {(incomeFilters.paymentMethod.length || 
                       incomeFilters.paymentStatus || 
                       incomeFilters.activeStatus || 
                       incomeFilters.search || 
@@ -1680,7 +1716,12 @@ export default function IncomeExpense() {
                       </th>
                       <th className="py-4 px-6 text-left bg-[#f5f5f7]/50 dark:bg-[#161922]">
                         <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
-                          {language === 'tr' ? 'Tarih' : 'Date'}
+                          {language === 'tr' ? 'Başlangıç-Bitiş' : 'Start-End'}
+                        </span>
+                      </th>
+                      <th className="py-4 px-6 text-left bg-[#f5f5f7]/50 dark:bg-[#161922]">
+                        <span className="text-xs font-medium uppercase tracking-wider text-[#6e6e73] dark:text-[#86868b]">
+                          {language === 'tr' ? 'Ödeme Günü' : 'Payment Date'}
                         </span>
                       </th>
                       <th className="py-4 px-6 text-center bg-[#f5f5f7]/50 dark:bg-[#161922]">
@@ -1742,6 +1783,13 @@ export default function IncomeExpense() {
                           <div className="flex flex-col">
                             <span className="text-sm text-[#424245] dark:text-[#86868b]">
                               {new Date(item.date).toLocaleDateString('tr-TR')} - {item.end_date ? new Date(item.end_date).toLocaleDateString('tr-TR') : new Date(item.date).toLocaleDateString('tr-TR')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex flex-col">
+                            <span className="text-sm text-[#424245] dark:text-[#86868b]">
+                              {new Date(item.payment_date).toLocaleDateString('tr-TR')}
                             </span>
                           </div>
                         </td>

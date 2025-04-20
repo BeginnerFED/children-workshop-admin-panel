@@ -20,7 +20,8 @@ import {
   TrashIcon,
   XMarkIcon,
   AdjustmentsHorizontalIcon,
-  ClockIcon as HistoryIcon
+  ClockIcon as HistoryIcon,
+  ArrowUturnUpIcon
 } from '@heroicons/react/24/outline'
 import DeleteRegisterModal from '../components/DeleteRegisterModal'
 import Toast from '../components/ui/Toast'
@@ -58,6 +59,9 @@ export default function Registration() {
   const [selectedHistoryRegistration, setSelectedHistoryRegistration] = useState(null)
   const [extensionHistory, setExtensionHistory] = useState([])
   const [isHistoryLoading, setIsHistoryLoading] = useState(false)
+  const [isActivateModalOpen, setIsActivateModalOpen] = useState(false)
+  const [registrationToActivate, setRegistrationToActivate] = useState(null)
+  const [isActivating, setIsActivating] = useState(false)
 
   // Kayıtları getir
   const fetchRegistrations = async () => {
@@ -227,14 +231,31 @@ export default function Registration() {
     setIsHistoryLoading(true)
 
     try {
-      const { data, error } = await supabase
+      // İlk kayıt için payment_date bilgisini al
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('financial_records')
+        .select('payment_date')
+        .eq('registration_id', registration.id)
+        .eq('transaction_type', 'initial_payment')
+        .single()
+
+      if (paymentError) throw paymentError
+
+      // Uzatma geçmişini al
+      const { data: extensionData, error: extensionError } = await supabase
         .from('extension_history')
         .select('*')
         .eq('registration_id', registration.id)
         .order('created_at', { ascending: true })
 
-      if (error) throw error
-      setExtensionHistory(data)
+      if (extensionError) throw extensionError
+
+      // Registration objesine payment_date ekle
+      setSelectedHistoryRegistration({
+        ...registration,
+        payment_date: paymentData?.payment_date
+      })
+      setExtensionHistory(extensionData)
     } catch (error) {
       console.error('Geçmiş kayıtlar getirilirken hata:', error.message)
       showToast(
@@ -245,6 +266,47 @@ export default function Registration() {
       )
     } finally {
       setIsHistoryLoading(false)
+    }
+  }
+
+  const handleActivateClick = (registration) => {
+    setRegistrationToActivate(registration)
+    setIsActivateModalOpen(true)
+  }
+
+  const handleActivate = async () => {
+    setIsActivating(true)
+    try {
+      const { error } = await supabase
+        .from('registrations')
+        .update({ is_active: true })
+        .eq('id', registrationToActivate.id)
+
+      if (error) throw error
+
+      // Kayıtları yenile
+      fetchRegistrations()
+      
+      // Modal'ı kapat
+      setIsActivateModalOpen(false)
+      setRegistrationToActivate(null)
+
+      // Başarılı mesajı göster
+      showToast(
+        language === 'tr' 
+          ? `${registrationToActivate.student_name} isimli kayıt başarıyla aktifleştirildi.`
+          : `Record for ${registrationToActivate.student_name} has been successfully activated.`
+      )
+    } catch (error) {
+      console.error('Kayıt aktifleştirilirken hata:', error.message)
+      showToast(
+        language === 'tr'
+          ? 'Kayıt aktifleştirilirken bir hata oluştu.'
+          : 'An error occurred while activating the record.',
+        'error'
+      )
+    } finally {
+      setIsActivating(false)
     }
   }
 
@@ -483,6 +545,9 @@ export default function Registration() {
                           <CreditCardIcon className="w-[18px] h-[18px] shrink-0" />
                           <span>
                             {formatPaymentMethod(registration.payment_method)} - {registration.payment_amount} ₺
+                            {registration.payment_status === 'odendi' && registration.payment_date && (
+                              <> - {formatDate(registration.payment_date)}</>
+                            )}
                           </span>
                         </div>
 
@@ -497,52 +562,43 @@ export default function Registration() {
 
                   {/* Action Buttons */}
                   <div className="h-0 group-hover:h-[45px] opacity-0 group-hover:opacity-100 border-t border-[#d2d2d7] dark:border-[#2a3241] transition-all duration-200 overflow-hidden">
-                    <div className="flex items-center divide-x divide-[#d2d2d7] dark:divide-[#2a3241]">
-                      <button
-                        onClick={() => handleUpdateClick(registration)}
-                        className={`
-                          flex-1 h-11 flex items-center justify-center gap-2 font-medium transition-colors text-sm
-                          ${filters.showArchived 
-                            ? 'text-[#86868b] cursor-not-allowed'
-                            : 'text-[#424245] dark:text-[#86868b] hover:text-[#0071e3] dark:hover:text-[#0071e3] hover:bg-[#0071e3]/5 dark:hover:bg-[#0071e3]/10'
-                          }
-                        `}
-                        disabled={filters.showArchived}
-                      >
-                        <PencilSquareIcon className="w-4 h-4" />
-                        <span>{language === 'tr' ? 'Güncelle' : 'Update'}</span>
-                      </button>
+                    {filters.showArchived ? (
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => handleActivateClick(registration)}
+                          className="w-full h-11 flex items-center justify-center gap-2 font-medium transition-colors text-sm text-[#424245] dark:text-[#86868b] hover:text-[#0071e3] dark:hover:text-[#0071e3] hover:bg-[#0071e3]/5 dark:hover:bg-[#0071e3]/10"
+                        >
+                          <ArrowUturnUpIcon className="w-4 h-4" />
+                          <span>{language === 'tr' ? 'Aktifleştir' : 'Activate'}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center divide-x divide-[#d2d2d7] dark:divide-[#2a3241]">
+                        <button
+                          onClick={() => handleUpdateClick(registration)}
+                          className="flex-1 h-11 flex items-center justify-center gap-2 font-medium transition-colors text-sm text-[#424245] dark:text-[#86868b] hover:text-[#0071e3] dark:hover:text-[#0071e3] hover:bg-[#0071e3]/5 dark:hover:bg-[#0071e3]/10"
+                        >
+                          <PencilSquareIcon className="w-4 h-4" />
+                          <span>{language === 'tr' ? 'Güncelle' : 'Update'}</span>
+                        </button>
 
-                      <button
-                        onClick={() => handleExtendClick(registration)}
-                        className={`
-                          flex-1 h-11 flex items-center justify-center gap-2 font-medium transition-colors text-sm
-                          ${filters.showArchived 
-                            ? 'text-[#86868b] cursor-not-allowed'
-                            : 'text-[#424245] dark:text-[#86868b] hover:text-[#34c759] dark:hover:text-[#32d74b] hover:bg-[#34c759]/5 dark:hover:bg-[#32d74b]/10'
-                          }
-                        `}
-                        disabled={filters.showArchived}
-                      >
-                        <ArrowPathIcon className="w-4 h-4" />
-                        <span>{language === 'tr' ? 'Uzat' : 'Extend'}</span>
-                      </button>
+                        <button
+                          onClick={() => handleExtendClick(registration)}
+                          className="flex-1 h-11 flex items-center justify-center gap-2 font-medium transition-colors text-sm text-[#424245] dark:text-[#86868b] hover:text-[#34c759] dark:hover:text-[#32d74b] hover:bg-[#34c759]/5 dark:hover:bg-[#32d74b]/10"
+                        >
+                          <ArrowPathIcon className="w-4 h-4" />
+                          <span>{language === 'tr' ? 'Uzat' : 'Extend'}</span>
+                        </button>
 
-                      <button
-                        onClick={() => handleDeleteClick(registration)}
-                        className={`
-                          flex-1 h-11 flex items-center justify-center gap-2 font-medium transition-colors text-sm
-                          ${filters.showArchived 
-                            ? 'text-[#86868b] cursor-not-allowed'
-                            : 'text-[#424245] dark:text-[#86868b] hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/5 dark:hover:bg-[#ef4444]/10'
-                          }
-                        `}
-                        disabled={filters.showArchived}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                        <span>{language === 'tr' ? 'Arşivle' : 'Archive'}</span>
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => handleDeleteClick(registration)}
+                          className="flex-1 h-11 flex items-center justify-center gap-2 font-medium transition-colors text-sm text-[#424245] dark:text-[#86868b] hover:text-[#ef4444] dark:hover:text-[#ef4444] hover:bg-[#ef4444]/5 dark:hover:bg-[#ef4444]/10"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                          <span>{language === 'tr' ? 'Arşivle' : 'Archive'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -812,22 +868,22 @@ export default function Registration() {
                 {/* İlk Kayıt Skeleton */}
                 <div className="mb-8">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-6 h-6 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] animate-pulse" />
-                    <div className="h-5 w-24 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md animate-pulse" />
-                    <div className="h-4 w-20 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                    <div className="w-6 h-6 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241]" />
+                    <div className="h-5 w-24 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md " />
+                    <div className="h-4 w-20 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md" />
                   </div>
                   <div className="ml-9 p-4 rounded-xl bg-[#f5f5f7] dark:bg-[#1d1d1f] space-y-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241] animate-pulse" />
-                      <div className="h-4 w-48 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                      <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241]" />
+                      <div className="h-4 w-48 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md" />
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241] animate-pulse" />
-                      <div className="h-4 w-36 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                      <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241]" />
+                      <div className="h-4 w-36 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md" />
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241] animate-pulse" />
-                      <div className="h-4 w-40 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                      <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241]" />
+                      <div className="h-4 w-40 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md" />
                     </div>
                   </div>
                 </div>
@@ -836,22 +892,22 @@ export default function Registration() {
                 {[...Array(2)].map((_, index) => (
                   <div key={index} className="mb-8">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-6 h-6 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241] animate-pulse" />
-                      <div className="h-5 w-24 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md animate-pulse" />
-                      <div className="h-4 w-20 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                      <div className="w-6 h-6 rounded-full bg-[#f5f5f7] dark:bg-[#2a3241]" />
+                      <div className="h-5 w-24 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md" />
+                      <div className="h-4 w-20 bg-[#f5f5f7] dark:bg-[#2a3241] rounded-md" />
                     </div>
                     <div className="ml-9 p-4 rounded-xl bg-[#f5f5f7] dark:bg-[#1d1d1f] space-y-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241] animate-pulse" />
-                        <div className="h-4 w-48 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                        <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241]" />
+                        <div className="h-4 w-48 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241] animate-pulse" />
-                        <div className="h-4 w-36 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                        <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241]" />
+                        <div className="h-4 w-36 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241] animate-pulse" />
-                        <div className="h-4 w-40 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md animate-pulse" />
+                        <div className="w-4 h-4 rounded-full bg-[#e5e5e5] dark:bg-[#2a3241]" />
+                        <div className="h-4 w-40 bg-[#e5e5e5] dark:bg-[#2a3241] rounded-md" />
                       </div>
                     </div>
                   </div>
@@ -890,6 +946,9 @@ export default function Registration() {
                         <CreditCardIcon className="w-4 h-4 text-[#86868b]" />
                         <span className="text-[#424245] dark:text-[#86868b]">
                           {formatPaymentMethod(selectedHistoryRegistration.initial_payment_method)} - {selectedHistoryRegistration.initial_payment_amount} ₺
+                          {selectedHistoryRegistration.payment_date && (
+                            <> - {formatDate(selectedHistoryRegistration.payment_date)}</>
+                          )}
                         </span>
                       </div>
                       {selectedHistoryRegistration.initial_notes && (
@@ -929,13 +988,18 @@ export default function Registration() {
                             <div className="flex items-center gap-2 text-sm">
                               <CalendarDaysIcon className="w-4 h-4 text-[#86868b]" />
                               <span className="text-[#424245] dark:text-[#86868b]">
-                                {formatDate(history.previous_end_date)} - {formatDate(history.new_end_date)}
+                                {history.new_start_date 
+                                  ? `${formatDate(history.new_start_date)} - ${formatDate(history.new_end_date)}`
+                                  : `${formatDate(history.previous_end_date)} - ${formatDate(history.new_end_date)}`}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                               <CreditCardIcon className="w-4 h-4 text-[#86868b]" />
                               <span className="text-[#424245] dark:text-[#86868b]">
                                 {formatPaymentMethod(history.payment_method)} - {history.payment_amount} ₺
+                                {history.payment_date && (
+                                  <> - {formatDate(history.payment_date)}</>
+                                )}
                               </span>
                             </div>
                             {history.notes && (
@@ -968,6 +1032,129 @@ export default function Registration() {
           }}
         />
       )}
+
+      {/* Aktifleştirme onay modalını ekliyorum */}
+      <div className={`
+        fixed inset-0 z-50 overflow-y-auto
+        ${isActivateModalOpen ? 'block' : 'hidden'}
+      `}>
+        {/* Overlay */}
+        <div className="fixed inset-0 bg-black bg-opacity-25 backdrop-blur-sm transition-opacity" />
+
+        {/* Modal */}
+        <div className="flex min-h-screen items-center justify-center p-4">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white dark:bg-[#121621] p-6 shadow-xl transition-all">
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setIsActivateModalOpen(false)
+                setRegistrationToActivate(null)
+              }}
+              className="absolute right-4 top-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#2a3241] transition-colors"
+            >
+              <XMarkIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </button>
+
+            {/* Content */}
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
+                  <ArrowUturnUpIcon className="h-6 w-6 text-green-600 dark:text-green-500" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-[#1d1d1f] dark:text-white">
+                    {language === 'tr' ? 'Kaydı Aktifleştir' : 'Activate Record'}
+                  </h2>
+                  <p className="text-[#6e6e73] dark:text-[#86868b] text-sm">
+                    {language === 'tr' 
+                      ? 'Bu kayıt aktif listeye taşınacak'
+                      : 'This record will be moved to active list'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="rounded-xl bg-[#f5f5f7] dark:bg-[#1d1d1f] p-4 space-y-3">
+                  {/* Öğrenci Bilgileri */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-[#6e6e73] dark:text-[#86868b]">
+                      {language === 'tr' ? 'Öğrenci:' : 'Student:'}
+                    </span>
+                    <span className="font-medium text-[#1d1d1f] dark:text-white">
+                      {registrationToActivate?.student_name}
+                    </span>
+                  </div>
+
+                  {/* Yaş Bilgisi */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-[#6e6e73] dark:text-[#86868b]">
+                      {language === 'tr' ? 'Yaş:' : 'Age:'}
+                    </span>
+                    <span className="font-medium text-[#1d1d1f] dark:text-white">
+                      {registrationToActivate?.student_age}
+                    </span>
+                  </div>
+
+                  {/* Veli Bilgisi */}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-[#6e6e73] dark:text-[#86868b]">
+                      {language === 'tr' ? 'Veli:' : 'Parent:'}
+                    </span>
+                    <span className="font-medium text-[#1d1d1f] dark:text-white">
+                      {registrationToActivate?.parent_name}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bilgi Mesajı */}
+                <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-900/30">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    {language === 'tr' 
+                      ? 'Bu işlem kaydı arşivden çıkarıp aktif kayıtlar listesine taşıyacaktır.'
+                      : 'This action will move the record from archive to the active records list.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsActivateModalOpen(false)
+                    setRegistrationToActivate(null)
+                  }}
+                  className="flex-1 h-11 bg-gray-100 dark:bg-[#1d1d1f] text-[#1d1d1f] dark:text-white font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-[#161616] focus:outline-none transition-all transform hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50"
+                  disabled={isActivating}
+                >
+                  {language === 'tr' ? 'İptal' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleActivate}
+                  className="flex-1 h-11 bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 focus:outline-none transition-all transform hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={isActivating}
+                >
+                  {isActivating ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>{language === 'tr' ? 'Aktifleştiriliyor' : 'Activating'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowUturnUpIcon className="w-5 h-5" />
+                      <span>{language === 'tr' ? 'Aktifleştir' : 'Activate'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 } 

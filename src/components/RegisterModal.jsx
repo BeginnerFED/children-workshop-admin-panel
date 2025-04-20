@@ -36,7 +36,8 @@ const initialFormData = {
   paymentStatus: '',
   paymentMethod: '',
   amount: '',
-  note: ''
+  note: '',
+  paymentDate: null // Varsayılan olarak null (tarih seçilmemiş)
 }
 
 const initialDateRange = [{
@@ -48,6 +49,7 @@ const initialDateRange = [{
 export default function RegisterModal({ isOpen, onClose, onSuccess }) {
   const { language } = useLanguage()
   const datePickerRef = useRef(null)
+  const paymentDatePickerRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
   const [toast, setToast] = useState({
     visible: false,
@@ -57,12 +59,14 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
   const [formData, setFormData] = useState(initialFormData)
   const [dateRange, setDateRange] = useState(initialDateRange)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [isPaymentDatePickerOpen, setIsPaymentDatePickerOpen] = useState(false)
 
   // Form verilerini sıfırlama fonksiyonu
   const resetForm = () => {
     setFormData(initialFormData)
     setDateRange(initialDateRange)
     setIsCalendarOpen(false)
+    setIsPaymentDatePickerOpen(false)
   }
 
   // Modal kapandığında formu sıfırla
@@ -77,6 +81,9 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
     const handleClickOutside = (event) => {
       if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
         setIsCalendarOpen(false)
+      }
+      if (paymentDatePickerRef.current && !paymentDatePickerRef.current.contains(event.target)) {
+        setIsPaymentDatePickerOpen(false)
       }
     }
 
@@ -118,7 +125,8 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
     return (
       baseValidation &&
       formData.paymentMethod !== '' &&
-      formData.amount.trim() !== ''
+      formData.amount.trim() !== '' &&
+      formData.paymentDate !== null // Ödeme tarihi seçilmiş olmalı
     )
   }
 
@@ -131,7 +139,8 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
           ...prev,
           [name]: value,
           paymentMethod: '',
-          amount: ''
+          amount: '',
+          paymentDate: null
         }
       }
       
@@ -141,7 +150,8 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
         return {
           ...prev,
           [name]: value,
-          paymentMethod: '' // Dropdown'ı sıfırla, kullanıcıyı seçim yapmaya zorla
+          paymentMethod: '', // Dropdown'ı sıfırla, kullanıcıyı seçim yapmaya zorla
+          paymentDate: null  // Otomatik bugün atamayı kaldırdık
         }
       }
       
@@ -177,6 +187,7 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
             payment_status: formData.paymentStatus,
             payment_method: paymentMethod,
             payment_amount: paymentAmount,
+            payment_date: formData.paymentStatus === 'beklemede' ? null : formData.paymentDate,
             notes: formData.note.trim() || null,
             is_active: true,
             // İlk kayıt bilgileri (trigger tarafından da kaydedilecek)
@@ -210,6 +221,7 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
             amount: paymentAmount,
             payment_method: paymentMethod,
             payment_status: formData.paymentStatus,
+            payment_date: formData.paymentStatus === 'beklemede' ? null : formData.paymentDate,
             notes: formData.note.trim() || null
           })
 
@@ -246,7 +258,7 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
         isVisible={toast.visible}
         onClose={() => setToast(prev => ({ ...prev, visible: false }))}
       />
-      <style jsx>{`
+      <style jsx="true">{`
         /* Cross-browser compatibility for select elements */
         select {
           -webkit-appearance: none;
@@ -691,28 +703,126 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
                   )}
                 </div>
 
-                {/* Notlar */}
-                <div className="relative">
+                {/* Ödeme Tarihi - Taşındı */}
+                <div className="relative group" ref={paymentDatePickerRef}>
                   <div className={iconWrapperClasses}>
-                    <PencilSquareIcon className={iconClasses} />
+                    <CalendarDaysIcon className={iconClasses} />
                   </div>
                   <input
                     type="text"
-                    name="note"
-                    value={formData.note}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setFormData(prev => ({
-                        ...prev,
-                        note: value.charAt(0).toUpperCase() + value.slice(1)
-                      }))
-                    }}
-                    className={inputClasses}
-                    placeholder={language === 'tr' ? "Not ekle..." : "Add note..."}
+                    className={`${inputClasses} cursor-pointer peer ${formData.paymentStatus !== 'odendi' && 'opacity-50 cursor-not-allowed'}`}
+                    placeholder={language === 'tr' ? "Ödeme Yapılan Gün" : "Payment Date"}
+                    value={formData.paymentDate 
+                      ? formatDate(formData.paymentDate) 
+                      : formData.paymentStatus === 'beklemede' 
+                        ? (language === 'tr' ? "Ödeme Beklemede" : "Payment Pending")
+                        : (language === 'tr' ? "Ödeme Tarihi Seçin" : "Select Payment Date")}
+                    onClick={() => formData.paymentStatus === 'odendi' && setIsPaymentDatePickerOpen(!isPaymentDatePickerOpen)}
+                    readOnly
                     tabIndex={10}
                     autoComplete="off"
+                    disabled={formData.paymentStatus !== 'odendi'}
                   />
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 dark:bg-[#007AFF] text-white text-sm rounded-md opacity-0 invisible peer-hover:opacity-100 peer-hover:visible transition-all duration-200 whitespace-nowrap shadow-lg dark:shadow-[#007AFF]/20">
+                    {formData.paymentStatus === 'odendi' 
+                      ? (language === 'tr' ? "Ödeme Tarihi" : "Payment Date")
+                      : (language === 'tr' ? "Ödeme durumu 'Ödendi' olduğunda aktif olacaktır" : "Will be active when payment status is 'Paid'")
+                    }
+                  </div>
+                  {isPaymentDatePickerOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 z-50">
+                      <div className="p-4 bg-white dark:bg-[#121621] rounded-xl shadow-xl border border-[#d2d2d7] dark:border-[#424245]">
+                        <style>
+                          {`
+                            .rdrCalendarWrapper,
+                            .rdrDateDisplayWrapper,
+                            .rdrMonthAndYearWrapper {
+                              background-color: transparent !important;
+                              color: inherit !important;
+                            }
+                            .dark .rdrCalendarWrapper,
+                            .dark .rdrDateDisplayWrapper,
+                            .dark .rdrMonthAndYearWrapper {
+                              background-color: #121621 !important;
+                              color: white !important;
+                            }
+                            .dark .rdrMonthAndYearPickers select {
+                              color: white !important;
+                              background-color: #121621 !important;
+                            }
+                            .dark .rdrMonthAndYearPickers select option {
+                              background-color: #121621 !important;
+                            }
+                            .dark .rdrDateDisplayItem {
+                              background-color: #121621 !important;
+                              border-color: #424245 !important;
+                            }
+                            .dark .rdrDateDisplayItem input {
+                              color: white !important;
+                            }
+                            .dark .rdrDayNumber span {
+                              color: white !important;
+                            }
+                            .dark .rdrDayPassive .rdrDayNumber span {
+                              color: #636363 !important;
+                            }
+                            .dark .rdrMonthName {
+                              color: #86868b !important;
+                            }
+                            .dark .rdrWeekDay {
+                              color: #86868b !important;
+                            }
+                          `}
+                        </style>
+                        <DateRange
+                          onChange={item => {
+                            setFormData(prev => ({
+                              ...prev,
+                              paymentDate: item.selection.startDate
+                            }))
+                            setIsPaymentDatePickerOpen(false)
+                          }}
+                          moveRangeOnFirstSelection={false}
+                          months={1}
+                          ranges={[{
+                            startDate: formData.paymentDate || new Date(),
+                            endDate: formData.paymentDate || new Date(),
+                            key: 'selection'
+                          }]}
+                          direction="horizontal"
+                          locale={tr}
+                          rangeColors={['#007AFF']}
+                          showDateDisplay={false}
+                          staticRanges={[]}
+                          inputRanges={[]}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Notlar - Şimdi full genişlikte */}
+              <div className="md:col-span-2 relative">
+                <div className={iconWrapperClasses}>
+                  <PencilSquareIcon className={iconClasses} />
+                </div>
+                <input
+                  type="text"
+                  name="note"
+                  value={formData.note}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      note: value.charAt(0).toUpperCase() + value.slice(1)
+                    }))
+                  }}
+                  className={inputClasses}
+                  placeholder={language === 'tr' ? "Not ekle..." : "Add note..."}
+                  tabIndex={11}
+                  autoComplete="off"
+                />
               </div>
 
               {/* Buttons */}
@@ -721,7 +831,7 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
                   type="button"
                   onClick={onClose}
                   className="w-full h-11 bg-gray-100 dark:bg-[#1d1d1f] text-[#1d1d1f] dark:text-white font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-[#161616] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 dark:focus:ring-[#2a2a2a] transition-all transform hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50"
-                  tabIndex={11}
+                  tabIndex={12}
                   disabled={isLoading}
                 >
                   {language === 'tr' ? 'İptal' : 'Cancel'}
@@ -729,7 +839,7 @@ export default function RegisterModal({ isOpen, onClose, onSuccess }) {
                 <button
                   type="submit"
                   className="w-full h-11 bg-[#1d1d1f] dark:bg-[#0071e3] text-white font-medium rounded-xl hover:bg-black dark:hover:bg-[#0077ed] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0071e3] transition-all transform hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  tabIndex={12}
+                  tabIndex={13}
                   disabled={!isFormValid() || isLoading}
                 >
                   {isLoading ? (

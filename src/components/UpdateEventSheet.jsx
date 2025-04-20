@@ -426,49 +426,80 @@ export default function UpdateEventSheet({ isOpen, onClose, onSuccess, eventId }
           onSuccess('Etkinlik başarıyla kopyalandı');
         }
       } else {
-        // Güncelleme modu - mevcut etkinliği güncelle
+        // ############ GÜNCELLEME MODU BAŞLANGICI ############
+
+        // 1. Mevcut katılımcıların ID'lerini al
+        const { data: currentParticipants, error: fetchCurrentError } = await supabase
+          .from('event_participants')
+          .select('registration_id')
+          .eq('event_id', eventId);
+        
+        if (fetchCurrentError) throw fetchCurrentError;
+        const currentParticipantIds = new Set(currentParticipants.map(p => p.registration_id));
+
+        // 2. Yeni (formdaki) katılımcı ID'lerini al
+        const newParticipantIds = new Set(formData.students.map(s => s.value));
+
+        // 3. Farkları hesapla
+        const participantsToDelete = [...currentParticipantIds].filter(id => !newParticipantIds.has(id));
+        const participantsToAdd = [...newParticipantIds].filter(id => !currentParticipantIds.has(id));
+        // Korunacaklara dokunmuyoruz
+
+        // 4. Silinecek katılımcıları sil
+        if (participantsToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('event_participants')
+            .delete()
+            .eq('event_id', eventId)
+            .in('registration_id', participantsToDelete);
+          
+          if (deleteError) {
+            console.error("Katılımcılar silinirken hata:", deleteError);
+            throw deleteError; // Hata durumunda işlemi durdur
+          }
+        }
+
+        // 5. Eklenecek katılımcıları ekle
+        if (participantsToAdd.length > 0) {
+          const inserts = participantsToAdd.map(regId => ({
+            event_id: eventId,
+            registration_id: regId
+            // status: 'scheduled' (varsayılan)
+          }));
+          
+          const { error: insertError } = await supabase
+            .from('event_participants')
+            .insert(inserts);
+          
+          if (insertError) {
+            console.error("Katılımcılar eklenirken hata:", insertError);
+            // Eklenenleri geri almak zor olabilir, hatayı loglayıp devam edilebilir veya işlem durdurulabilir.
+            throw insertError; 
+          }
+        }
+
+        // 6. Ana etkinlik bilgilerini güncelle
         const updatedEventData = {
           event_date: eventDateTime.toISOString(),
           age_group: formData.ageGroup,
           event_type: formData.eventType,
           custom_description: formData.eventType === 'ozel' ? formData.customDescription : null,
           updated_at: new Date().toISOString()
+          // Not: current_capacity trigger tarafından otomatik güncelleniyor
         };
 
-        // Etkinliği güncelle
-        const { error: updateError } = await supabase
+        const { error: updateEventError } = await supabase
           .from('events')
           .update(updatedEventData)
           .eq('id', eventId);
 
-        if (updateError) throw updateError;
-
-        // Mevcut katılımcıları sil
-        const { error: deleteParticipantsError } = await supabase
-          .from('event_participants')
-          .delete()
-          .eq('event_id', eventId);
-
-        if (deleteParticipantsError) throw deleteParticipantsError;
-
-        // Yeni katılımcıları ekle
-        if (Array.isArray(formData.students) && formData.students.length > 0) {
-          const participantInserts = formData.students.map(student => ({
-            event_id: eventId,
-            registration_id: student.value
-          }));
-
-          const { error: participantError } = await supabase
-            .from('event_participants')
-            .insert(participantInserts);
-
-          if (participantError) throw participantError;
-        }
+        if (updateEventError) throw updateEventError;
 
         // Başarılı mesajı göster
         if (onSuccess) {
           onSuccess('Etkinlik başarıyla güncellendi');
         }
+        // ############ GÜNCELLEME MODU SONU ############
       }
       
       onClose();

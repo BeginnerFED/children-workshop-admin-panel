@@ -29,6 +29,7 @@ const supabase = createClient(
 export default function UpdateModal({ isOpen, onClose, onSuccess, registration }) {
   const { language } = useLanguage()
   const datePickerRef = useRef(null)
+  const paymentDatePickerRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
   const [toast, setToast] = useState({
     visible: false,
@@ -36,6 +37,7 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
     type: 'success'
   })
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [isPaymentDatePickerOpen, setIsPaymentDatePickerOpen] = useState(false)
 
   // Form verilerini mevcut kayıt verileriyle başlat
   const [formData, setFormData] = useState({
@@ -47,7 +49,8 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
     paymentStatus: '',
     paymentMethod: '',
     amount: '',
-    note: ''
+    note: '',
+    paymentDate: null // Varsayılan olarak null
   })
 
   // Tarih aralığını mevcut kayıt verileriyle başlat
@@ -69,7 +72,8 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
         paymentStatus: registration.payment_status || '',
         paymentMethod: registration.payment_method || '',
         amount: registration.payment_amount?.toString() || '',
-        note: registration.notes || ''
+        note: registration.notes || '',
+        paymentDate: registration.payment_date ? new Date(registration.payment_date) : null
       })
 
       setDateRange([{
@@ -92,6 +96,9 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
     const handleClickOutside = (event) => {
       if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
         setIsCalendarOpen(false)
+      }
+      if (paymentDatePickerRef.current && !paymentDatePickerRef.current.contains(event.target)) {
+        setIsPaymentDatePickerOpen(false)
       }
     }
 
@@ -133,7 +140,8 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
     return (
       baseValidation &&
       formData.paymentMethod !== '' &&
-      formData.amount.trim() !== ''
+      formData.amount.trim() !== '' &&
+      formData.paymentDate !== null // Ödeme tarihi seçilmiş olmalı
     )
   }
 
@@ -146,7 +154,8 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
           ...prev,
           [name]: value,
           paymentMethod: '',
-          amount: ''
+          amount: '',
+          paymentDate: null // Ödeme tarihi null olarak ayarlanır
         }
       }
       
@@ -156,7 +165,8 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
         return {
           ...prev,
           [name]: value,
-          paymentMethod: '' // Dropdown'ı sıfırla, kullanıcıyı seçim yapmaya zorla
+          paymentMethod: '', // Dropdown'ı sıfırla, kullanıcıyı seçim yapmaya zorla
+          paymentDate: null  // Otomatik bugün atamayı kaldırdık
         }
       }
       
@@ -177,84 +187,68 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
       const paymentMethod = formData.paymentStatus === 'beklemede' ? 'belirlenmedi' : formData.paymentMethod
       const paymentAmount = formData.paymentStatus === 'beklemede' ? 0 : parseFloat(formData.amount)
 
-      // 1. Ana kaydı güncelle
-      const { error } = await supabase
+      // Güncellenecek ana kayıt verileri
+      const updateData = {
+        student_name: formData.studentName.trim(),
+        student_age: formData.age.trim(),
+        parent_name: formData.parentName.trim(),
+        parent_phone: formData.phone.trim(),
+        package_type: formData.packageType,
+        package_start_date: dateRange[0].startDate,
+        package_end_date: dateRange[0].endDate,
+        payment_status: formData.paymentStatus,
+        payment_method: paymentMethod,
+        payment_amount: paymentAmount,
+        payment_date: formData.paymentStatus === 'beklemede' ? null : formData.paymentDate, // Ödeme beklemedeyse null
+        notes: formData.note.trim() || null
+      }
+
+      // Eğer ilk kayıt güncelleniyorsa (uzatma yoksa), initial_* alanlarını da ekle
+      if (registration.extension_count === 0) {
+        updateData.initial_package_type = formData.packageType // Gerekirse ilk paket tipi de güncellenebilir
+        updateData.initial_start_date = dateRange[0].startDate
+        updateData.initial_end_date = dateRange[0].endDate
+        updateData.initial_payment_method = paymentMethod
+        updateData.initial_payment_amount = paymentAmount
+        updateData.initial_notes = formData.note.trim() || null
+        // Not: initial_payment_date gibi bir alanınız yok, payment_date kullanılıyor
+      }
+
+      // 1. Ana kaydı güncelle (initial_* alanları dahil veya hariç)
+      const { error: updateRegError } = await supabase
         .from('registrations')
-        .update({
-          student_name: formData.studentName.trim(),
-          student_age: formData.age.trim(),
-          parent_name: formData.parentName.trim(),
-          parent_phone: formData.phone.trim(),
-          package_type: formData.packageType,
-          package_start_date: dateRange[0].startDate,
-          package_end_date: dateRange[0].endDate,
-          payment_status: formData.paymentStatus,
-          payment_method: paymentMethod,
-          payment_amount: paymentAmount,
-          notes: formData.note.trim() || null
-        })
+        .update(updateData)
         .eq('id', registration.id)
 
-      if (error) {
-        if (error.code === '23505' && error.details?.includes('parent_phone')) {
+      if (updateRegError) {
+        if (updateRegError.code === '23505' && updateRegError.details?.includes('parent_phone')) {
           throw new Error(language === 'tr' 
             ? 'Bu telefon numarası ile daha önce kayıt yapılmış!'
             : 'This phone number has already been registered!'
           )
         }
-        throw error
+        throw updateRegError
       }
 
-      // 2. Eğer uzatma geçmişi varsa, son uzatma kaydını güncelle
-      if (registration.extension_count > 0) {
-        const { data: lastExtension, error: fetchError } = await supabase
-          .from('extension_history')
-          .select('*')
-          .eq('registration_id', registration.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-
-        if (fetchError) throw fetchError
-
-        if (lastExtension && lastExtension.length > 0) {
-          const { error: updateExtensionError } = await supabase
-            .from('extension_history')
-            .update({
-              new_package_type: formData.packageType,
-              new_end_date: dateRange[0].endDate,
-              payment_status: formData.paymentStatus,
-              payment_method: paymentMethod,
-              payment_amount: paymentAmount,
-              notes: formData.note.trim() || null
-            })
-            .eq('id', lastExtension[0].id)
-
-          if (updateExtensionError) throw updateExtensionError
-        }
-      }
-
-      // 3. Finansal kaydı güncelle
-      const { data: lastFinancial, error: fetchFinancialError } = await supabase
-        .from('financial_records')
-        .select('*')
-        .eq('registration_id', registration.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (fetchFinancialError) throw fetchFinancialError
-
-      if (lastFinancial && lastFinancial.length > 0) {
+      // 2. Eğer ilk kayıt güncelleniyorsa, ilk finansal kaydı da güncelle
+      if (registration.extension_count === 0) {
         const { error: updateFinancialError } = await supabase
           .from('financial_records')
           .update({
             amount: paymentAmount,
             payment_method: paymentMethod,
             payment_status: formData.paymentStatus,
+            payment_date: formData.paymentStatus === 'beklemede' ? null : formData.paymentDate, // Ödeme beklemedeyse null
             notes: formData.note.trim() || null
           })
-          .eq('id', lastFinancial[0].id)
+          .eq('registration_id', registration.id)
+          .eq('transaction_type', 'initial_payment') // Sadece ilk ödemeyi güncelle
 
-        if (updateFinancialError) throw updateFinancialError
+        if (updateFinancialError) {
+          console.error("İlk finansal kayıt güncellenirken hata:", updateFinancialError)
+          // Hata olursa işlemi geri almak zor olabilir, loglamak iyi bir başlangıç
+          // Belki kullanıcıya bir uyarı gösterilebilir.
+        }
       }
 
       setToast({
@@ -483,8 +477,8 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
                   </div>
                   {isCalendarOpen && (
                     <div className="absolute z-50 mt-2">
-                      <div className="p-4 bg-white dark:bg-[#121621] rounded-xl shadow-xl border border-[#d2d2d7] dark:border-[#424245]">
-                        <style>
+                      <div className="p-4 bg-white dark:bg-[#1d1f2e] rounded-xl shadow-xl border border-[#d2d2d7] dark:border-[#424245]">
+                        <style jsx="true">
                           {`
                             .rdrCalendarWrapper,
                             .rdrDateDisplayWrapper,
@@ -676,28 +670,126 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
                   )}
                 </div>
 
-                {/* Notlar */}
-                <div className="relative">
+                {/* Ödeme Tarihi - Taşındı */}
+                <div className="relative group" ref={paymentDatePickerRef}>
                   <div className={iconWrapperClasses}>
-                    <PencilSquareIcon className={iconClasses} />
+                    <CalendarDaysIcon className={iconClasses} />
                   </div>
                   <input
                     type="text"
-                    name="note"
-                    value={formData.note}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setFormData(prev => ({
-                        ...prev,
-                        note: value.charAt(0).toUpperCase() + value.slice(1)
-                      }))
-                    }}
-                    className={inputClasses}
-                    placeholder={language === 'tr' ? "Not ekle..." : "Add note..."}
+                    className={`${inputClasses} cursor-pointer peer ${formData.paymentStatus !== 'odendi' && 'opacity-50 cursor-not-allowed'}`}
+                    placeholder={language === 'tr' ? "Ödeme Yapılan Gün" : "Payment Date"}
+                    value={formData.paymentDate 
+                      ? formatDate(formData.paymentDate) 
+                      : formData.paymentStatus === 'beklemede' 
+                        ? (language === 'tr' ? "Ödeme Beklemede" : "Payment Pending")
+                        : (language === 'tr' ? "Ödeme Tarihi Seçin" : "Select Payment Date")}
+                    onClick={() => formData.paymentStatus === 'odendi' && setIsPaymentDatePickerOpen(!isPaymentDatePickerOpen)}
+                    readOnly
                     tabIndex={10}
                     autoComplete="off"
+                    disabled={formData.paymentStatus !== 'odendi'}
                   />
+                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 dark:bg-[#007AFF] text-white text-sm rounded-md opacity-0 invisible peer-hover:opacity-100 peer-hover:visible transition-all duration-200 whitespace-nowrap shadow-lg dark:shadow-[#007AFF]/20">
+                    {formData.paymentStatus === 'odendi' 
+                      ? (language === 'tr' ? "Ödeme Tarihi" : "Payment Date")
+                      : (language === 'tr' ? "Ödeme durumu 'Ödendi' olduğunda aktif olacaktır" : "Will be active when payment status is 'Paid'")
+                    }
+                  </div>
+                  {isPaymentDatePickerOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 z-50">
+                      <div className="p-4 bg-white dark:bg-[#121621] rounded-xl shadow-xl border border-[#d2d2d7] dark:border-[#424245]">
+                        <style>
+                          {`
+                            .rdrCalendarWrapper,
+                            .rdrDateDisplayWrapper,
+                            .rdrMonthAndYearWrapper {
+                              background-color: transparent !important;
+                              color: inherit !important;
+                            }
+                            .dark .rdrCalendarWrapper,
+                            .dark .rdrDateDisplayWrapper,
+                            .dark .rdrMonthAndYearWrapper {
+                              background-color: #121621 !important;
+                              color: white !important;
+                            }
+                            .dark .rdrMonthAndYearPickers select {
+                              color: white !important;
+                              background-color: #121621 !important;
+                            }
+                            .dark .rdrMonthAndYearPickers select option {
+                              background-color: #121621 !important;
+                            }
+                            .dark .rdrDateDisplayItem {
+                              background-color: #121621 !important;
+                              border-color: #424245 !important;
+                            }
+                            .dark .rdrDateDisplayItem input {
+                              color: white !important;
+                            }
+                            .dark .rdrDayNumber span {
+                              color: white !important;
+                            }
+                            .dark .rdrDayPassive .rdrDayNumber span {
+                              color: #636363 !important;
+                            }
+                            .dark .rdrMonthName {
+                              color: #86868b !important;
+                            }
+                            .dark .rdrWeekDay {
+                              color: #86868b !important;
+                            }
+                          `}
+                        </style>
+                        <DateRange
+                          onChange={item => {
+                            setFormData(prev => ({
+                              ...prev,
+                              paymentDate: item.selection.startDate
+                            }))
+                            setIsPaymentDatePickerOpen(false)
+                          }}
+                          moveRangeOnFirstSelection={false}
+                          months={1}
+                          ranges={[{
+                            startDate: formData.paymentDate || new Date(),
+                            endDate: formData.paymentDate || new Date(),
+                            key: 'selection'
+                          }]}
+                          direction="horizontal"
+                          locale={tr}
+                          rangeColors={['#007AFF']}
+                          showDateDisplay={false}
+                          staticRanges={[]}
+                          inputRanges={[]}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Notlar - Şimdi full genişlikte */}
+              <div className="md:col-span-2 relative">
+                <div className={iconWrapperClasses}>
+                  <PencilSquareIcon className={iconClasses} />
+                </div>
+                <input
+                  type="text"
+                  name="note"
+                  value={formData.note}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData(prev => ({
+                      ...prev,
+                      note: value.charAt(0).toUpperCase() + value.slice(1)
+                    }))
+                  }}
+                  className={inputClasses}
+                  placeholder={language === 'tr' ? "Not ekle..." : "Add note..."}
+                  tabIndex={11}
+                  autoComplete="off"
+                />
               </div>
 
               {/* Buttons */}
@@ -706,7 +798,7 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
                   type="button"
                   onClick={onClose}
                   className="w-full h-11 bg-gray-100 dark:bg-[#1d1d1f] text-[#1d1d1f] dark:text-white font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-[#161616] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 dark:focus:ring-[#2a2a2a] transition-all transform hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50"
-                  tabIndex={11}
+                  tabIndex={12}
                   disabled={isLoading}
                 >
                   {language === 'tr' ? 'İptal' : 'Cancel'}
@@ -714,7 +806,7 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
                 <button
                   type="submit"
                   className="w-full h-11 bg-[#1d1d1f] dark:bg-[#0071e3] text-white font-medium rounded-xl hover:bg-black dark:hover:bg-[#0077ed] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0071e3] transition-all transform hover:scale-[1.01] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  tabIndex={12}
+                  tabIndex={13}
                   disabled={!isFormValid() || isLoading}
                 >
                   {isLoading ? (

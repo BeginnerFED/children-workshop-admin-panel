@@ -252,7 +252,7 @@ export default function CreateExpenses({ isOpen, onClose, onSuccess }) {
   return (
     <>
       <style>{datePickerStyles}</style>
-      <style jsx>{`
+      <style jsx="true">{`
         /* Cross-browser compatibility for select elements */
         select {
           -webkit-appearance: none;

@@ -84,8 +84,8 @@ export default function DeleteRegisterModal({ isOpen, onClose, onConfirm, entry,
               <div className="rounded-xl bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-900/30">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
                   {language === 'tr' 
-                    ? 'Bu işlem geri alınamaz. Kayıt arşive taşındıktan sonra aktif kayıtlar listesinde görünmeyecek, ancak tüm geçmiş bilgileri saklanacaktır.'
-                    : 'This action cannot be undone. After archiving, the record will not appear in the active records list, but all historical data will be preserved.'}
+                    ? 'Kayıt arşive taşındıktan sonra aktif kayıtlar listesinde görünmeyecektir. Gerektiğinde arşiv görünümünden tekrar aktifleştirilebilir.'
+                    : 'After archiving, the record will not appear in the active records list. You can reactivate it from the archive view when needed.'}
                 </p>
               </div>
             </div>
