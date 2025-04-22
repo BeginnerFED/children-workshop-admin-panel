@@ -993,8 +993,8 @@ export default function IncomeExpense() {
     return new Intl.NumberFormat('tr-TR', {
       style: 'currency',
       currency: 'TRY',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      minimumFractionDigits: 2, // Değiştirildi: 0 -> 2
+      maximumFractionDigits: 2  // Değiştirildi: 0 -> 2
     }).format(amount)
   }
 

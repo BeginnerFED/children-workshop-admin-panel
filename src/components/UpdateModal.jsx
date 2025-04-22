@@ -215,10 +215,12 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
       }
 
       // 1. Ana kaydı güncelle (initial_* alanları dahil veya hariç)
-      const { error: updateRegError } = await supabase
+      const { data: updatedRegistrationData, error: updateRegError } = await supabase
         .from('registrations')
         .update(updateData)
         .eq('id', registration.id)
+        .select() // Select the updated data to potentially get the latest financial record id if needed
+        .single(); // Assuming update returns the updated row
 
       if (updateRegError) {
         if (updateRegError.code === '23505' && updateRegError.details?.includes('parent_phone')) {
@@ -230,24 +232,47 @@ export default function UpdateModal({ isOpen, onClose, onSuccess, registration }
         throw updateRegError
       }
 
-      // 2. Eğer ilk kayıt güncelleniyorsa, ilk finansal kaydı da güncelle
-      if (registration.extension_count === 0) {
+      // 2. İster ilk kayıt ister uzatma olsun, ilgili finansal kaydı güncelle
+      // Önce en son finansal kaydın ID'sini bulalım
+      const { data: latestFinancialRecord, error: findLatestError } = await supabase
+        .from('financial_records')
+        .select('id')
+        .eq('registration_id', registration.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (findLatestError) {
+        // Hata varsa ama 'PGRST116' (No rows found) değilse logla, ama devam et.
+        // Kayıt bulunamazsa garip bir durum olur ama ana kayıt güncellendi.
+        if (findLatestError.code !== 'PGRST116') {
+          console.error("En son finansal kayıt bulunurken hata:", findLatestError);
+          // Belki kullanıcıya bir uyarı gösterilebilir? Şimdilik devam ediyoruz.
+        }
+      } else if (latestFinancialRecord) {
+        // En son finansal kayıt bulunduysa, onu güncelle
         const { error: updateFinancialError } = await supabase
           .from('financial_records')
           .update({
             amount: paymentAmount,
             payment_method: paymentMethod,
             payment_status: formData.paymentStatus,
-            payment_date: formData.paymentStatus === 'beklemede' ? null : formData.paymentDate, // Ödeme beklemedeyse null
+            payment_date: formData.paymentStatus === 'beklemede' ? null : formData.paymentDate,
             notes: formData.note.trim() || null
+            // transaction_type DOKUNULMUYOR!
           })
-          .eq('registration_id', registration.id)
-          .eq('transaction_type', 'initial_payment') // Sadece ilk ödemeyi güncelle
+          .eq('id', latestFinancialRecord.id); // Bulunan ID ile güncelle
 
         if (updateFinancialError) {
-          console.error("İlk finansal kayıt güncellenirken hata:", updateFinancialError)
-          // Hata olursa işlemi geri almak zor olabilir, loglamak iyi bir başlangıç
-          // Belki kullanıcıya bir uyarı gösterilebilir.
+          console.error("İlgili finansal kayıt güncellenirken hata:", updateFinancialError);
+          // Hata olursa işlemi geri almak zor olabilir, loglamak iyi bir başlangıç.
+          // Kullanıcıya kesinlikle bir hata mesajı gösterilmeli.
+          setToast({
+            visible: true,
+            message: language === 'tr' ? 'Finansal detaylar güncellenirken hata oluştu.' : 'Error updating financial details.',
+            type: 'error'
+          });
+          // Belki burada işlemi durdurmak/geri almak daha iyi olabilir ama şimdilik logla ve devam et.
         }
       }
 
